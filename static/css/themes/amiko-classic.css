@@ -1,0 +1,33 @@
+/**
+ * AMIKO Classic Theme
+ * "640K ought to be enough for anybody." - Apocryphal
+ * Inspired by early monochrome CRT monitors (amber phosphor on black)
+ */
+
+:root {
+    /* Backgrounds — deep black like old CRT screens */
+    --bg-primary: #0a0a08;
+    --bg-secondary: #141410;
+    --bg-tertiary: #1c1c16;
+
+    /* Text & Outlines — warm amber phosphor glow */
+    --text-primary: #ffb000;
+    --text-secondary: #cc8800;
+    --text-dim: rgba(255, 176, 0, 0.45);
+
+    /* Semantic Accents */
+    --accent-warning: #ff6600cc;
+    --accent-danger: #ff3300cc;
+    --accent-info: #ffcc00bb;
+
+    /* Effects & Border — amber glow */
+    --border: rgba(255, 176, 0, 0.25);
+    --glow-primary: rgba(255, 176, 0, 0.3);
+    --glow-warning: rgba(255, 102, 0, 0.25);
+
+    /* Typography — chunky monospace */
+    --font-mono: 'Courier New', 'Consolas', 'Monaco', monospace;
+    --font-size-base: 16px;
+    --font-size-large: 18px;
+    --font-size-small: 14px;
+}

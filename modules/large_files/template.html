@@ -1,0 +1,31 @@
+<div class="amiko-module" data-module-type="large_files">
+    <div class="module-header">
+        <span class="module-title">📂 Large Files</span>
+        <div class="module-actions">
+            <button class="btn-expand" title="Expand/Collapse">⤢</button>
+            <button class="btn-close" title="Close Module">❌</button>
+        </div>
+    </div>
+    <div class="module-body">
+        <form class="form-grid amiko-mod-form">
+            <div class="form-group">
+                <label>Remote Path</label>
+                <input type="text" class="mod-files-path" placeholder="/var/www" required>
+            </div>
+            <div class="form-group">
+                <label>Size Threshold: <span class="mod-threshold-display text-amber">50 MB</span></label>
+                <input type="range" class="mod-files-threshold" min="1" max="500" value="50" step="1"
+                    style="width: 100%;">
+            </div>
+            <div class="form-group">
+                <label>&nbsp;</label>
+                <button type="submit" class="mod-btn-submit">SCAN LARGE FILES</button>
+            </div>
+        </form>
+        <div class="terminal-container" style="flex: 1;">
+            <div class="terminal-body large mod-terminal" style="height: 100%;">
+                <div class="log-entry log-dim">// Ready for operation...</div>
+            </div>
+        </div>
+    </div>
+</div>

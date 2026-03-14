@@ -1,0 +1,52 @@
+<div class="amiko-module" data-module-type="explorer">
+    <div class="module-header">
+        <span class="module-title">📂 Explorer</span>
+        <div class="module-actions">
+            <button class="btn-expand" title="Expand/Collapse">⤢</button>
+            <button class="btn-close" title="Close Module">❌</button>
+        </div>
+    </div>
+    <div class="module-body" style="display: flex; flex-direction: column; gap: 0; padding: 0; overflow: hidden;">
+
+        <!-- Breadcrumb Navigation -->
+        <div class="mod-explorer-breadcrumb"
+            style="padding: 8px 12px; border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1)); font-family: monospace; font-size: 0.85em; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-height: 32px; flex-shrink: 0;">
+            <span style="opacity: 0.5;">📍</span>
+            <span class="mod-explorer-crumb-root" style="cursor: pointer; color: var(--accent-amber, #f0c040);"
+                title="Go to /">/</span>
+        </div>
+
+        <!-- Path Input Bar -->
+        <div
+            style="padding: 6px 12px; border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1)); display: flex; gap: 6px; flex-shrink: 0;">
+            <input type="text" class="mod-explorer-path-input" placeholder="/" value="/"
+                style="flex: 1; background: transparent; border: 1px solid var(--border-color, rgba(255,255,255,0.15)); color: var(--text-primary, #0f0); padding: 4px 8px; font-family: monospace; font-size: 0.85em; border-radius: 3px;">
+            <button class="mod-explorer-btn-go mod-btn-submit" style="padding: 4px 14px; font-size: 0.85em;">GO</button>
+        </div>
+
+        <!-- File Listing Area -->
+        <div style="flex: 1; position: relative; min-height: 0;">
+            <div class="mod-explorer-listing-container"
+                style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow-y: auto;">
+                <table class="mod-explorer-table"
+                    style="width: 100%; border-collapse: collapse; font-family: monospace; font-size: 0.85em;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1)); opacity: 0.6;">
+                            <th style="text-align: left; padding: 6px 12px; font-weight: normal;">Name</th>
+                            <th style="text-align: right; padding: 6px 12px; font-weight: normal; width: 90px;">Size
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="mod-explorer-tbody">
+                        <tr>
+                            <td colspan="2" style="padding: 20px 12px; text-align: center; opacity: 0.4;">
+                                // Connect to a server to browse files...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>

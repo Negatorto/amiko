@@ -1,0 +1,224 @@
+/*
+ * AMIKO - Terminal Display CSS
+ * Retro CRT terminal with scanlines
+ * Reusable across all monitors
+ */
+
+.terminal-container {
+    background-color: var(--bg-primary);
+    border: 2px solid var(--text-primary);
+    margin: 20px 0;
+    box-shadow:
+        0 0 30px var(--glow-primary),
+        inset 0 0 20px rgba(0, 255, 65, 0.05);
+    position: relative;
+    overflow: hidden;
+    cursor: text;
+}
+
+/* Terminal Header Bar */
+.terminal-header {
+    background-color: var(--bg-secondary);
+    border-bottom: 1px solid var(--text-primary);
+    padding: 8px 15px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: var(--font-size-small);
+    color: var(--text-secondary);
+}
+
+.terminal-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.terminal-title::before {
+    content: "●";
+    color: var(--text-primary);
+    font-size: 10px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.3;
+    }
+}
+
+.terminal-info {
+    font-size: 10px;
+    color: var(--text-dim);
+}
+
+/* Terminal Body */
+.terminal-body {
+    padding: 15px 15px 0 15px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-base);
+    line-height: 1.4;
+    max-height: 400px;
+    height: 100%;
+    overflow-y: auto;
+    color: var(--text-primary);
+    position: relative;
+}
+
+.terminal-body.large {
+    max-height: 600px;
+}
+
+/* Terminal Lines */
+.terminal-line {
+    margin-bottom: 4px;
+    word-wrap: break-word;
+}
+
+.terminal-line::before {
+    content: "$ ";
+    color: var(--text-secondary);
+    margin-right: 5px;
+}
+
+/* Log Entry Types */
+.log-entry {
+    margin-bottom: 3px;
+    padding: 2px 0;
+}
+
+.log-info {
+    color: var(--accent-blue);
+}
+
+.log-success {
+    color: var(--text-primary);
+    font-weight: bold;
+    text-shadow: 0 0 8px var(--glow-primary);
+}
+
+.log-match {
+    color: var(--accent-amber);
+    /* Orange for matches */
+    font-weight: bold;
+    background-color: rgba(255, 170, 0, 0.1);
+    padding: 3px 8px;
+    margin: 2px 0;
+    border-left: 3px solid var(--accent-amber);
+    text-shadow: 0 0 8px var(--glow-amber);
+}
+
+.log-error {
+    color: var(--accent-red);
+    border-left: 3px solid var(--accent-red);
+    padding-left: 8px;
+}
+
+.log-dim {
+    color: var(--text-dim);
+    font-size: var(--font-size-small);
+}
+
+.log-warning {
+    color: var(--accent-amber);
+}
+
+/* Terminal Input (for SSH) */
+.terminal-input {
+    display: flex;
+    gap: 10px;
+    padding: 10px 15px;
+    background-color: var(--bg-secondary);
+    border-top: 1px solid var(--text-dim);
+}
+
+.terminal-input input {
+    flex: 1;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--text-dim);
+    color: var(--text-primary);
+    padding: 8px 12px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-base);
+}
+
+.terminal-input input:focus {
+    border-color: var(--text-primary);
+    box-shadow: 0 0 10px var(--glow-primary);
+    outline: none;
+}
+
+.terminal-input button {
+    padding: 8px 20px;
+}
+
+/* Cursor Blink */
+.cursor {
+    display: inline-block;
+    width: 8px;
+    height: 16px;
+    background-color: var(--text-primary);
+    margin-left: 2px;
+    animation: blink-cursor 1s infinite;
+}
+
+@keyframes blink-cursor {
+
+    0%,
+    49% {
+        opacity: 1;
+    }
+
+    50%,
+    100% {
+        opacity: 0;
+    }
+}
+
+/* Custom Scrollbar for Terminal */
+.terminal-body::-webkit-scrollbar {
+    width: 10px;
+}
+
+.terminal-body::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--text-dim);
+}
+
+.terminal-body::-webkit-scrollbar-thumb {
+    background: var(--text-dim);
+    border: 1px solid var(--text-primary);
+}
+
+.terminal-body::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+    box-shadow: 0 0 10px var(--glow-primary);
+}
+
+/* Responsive Terminal */
+@media (max-width: 768px) {
+    .terminal-body {
+        max-height: 300px;
+        font-size: var(--font-size-small);
+        padding: 10px;
+    }
+
+    .terminal-header {
+        padding: 6px 10px;
+    }
+
+    .terminal-input {
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .terminal-input button {
+        width: 100%;
+    }
+}

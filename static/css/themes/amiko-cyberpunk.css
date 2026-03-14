@@ -1,0 +1,32 @@
+/**
+ * AMIKO Cyberpunk Theme
+ * "Wake up, Samurai. We have a city to burn." - Cyberpunk 2077
+ */
+
+:root {
+    /* Backgrounds */
+    --bg-primary: #05051a;
+    --bg-secondary: #0f0f2d;
+    --bg-tertiary: #1a1a40;
+
+    /* Text & Outlines */
+    --text-primary: #00ffff;
+    --text-secondary: #ff00ff;
+    --text-dim: #006666;
+
+    /* Semantic Accents */
+    --accent-warning: #fdee00;
+    --accent-danger: #ff003c;
+    --accent-info: #bc13fe;
+
+    /* Effects & Border */
+    --border: #4d004d;
+    --glow-primary: rgba(0, 255, 255, 0.5);
+    --glow-warning: rgba(253, 238, 0, 0.5);
+
+    /* Typography */
+    --font-mono: 'Courier New', 'Consolas', 'Monaco', monospace;
+    --font-size-base: 14px;
+    --font-size-large: 16px;
+    --font-size-small: 12px;
+}

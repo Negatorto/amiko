@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMIKO - Advanced Multi-function Interface Kit for Operations</title>
+
+    <!-- Custom CSSThemes -->
+    <link rel="stylesheet" id="theme-stylesheet" href="{{ url_for('static', filename='css/themes/amiko-theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/connection.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/terminal.css') }}">
+    <!-- Xterm.js CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='lib/xterm/xterm.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/resource-bars.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
+
+    <!-- GridStack.js CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack.min.css" rel="stylesheet" />
+    <!-- WinBox.js CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/winbox@0.2.82/dist/css/winbox.min.css" rel="stylesheet" />
+</head>
+
+<body>
+    <!-- Header -->
+    <header>
+        <div class="header-content">
+            <div class="logo-container">
+                <img src="{{ url_for('static', filename='img/AMIKO.png') }}" alt="AMIKO Logo" class="logo-img">
+                <div>
+                    <h1 class="app-title">AMIKO</h1>
+                    <p class="app-subtitle">Advanced Multi-function Interface Kit for Operations</p>
+                </div>
+            </div>
+
+            <button class="btn-settings" id="btnSettings" title="Impostazioni"
+                style="display: flex; align-items: center; gap: 8px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path
+                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                    </path>
+                </svg>
+                <span class="btn-settings-label">Settings</span>
+            </button>
+        </div>
+
+        <!-- Global Connection Panel -->
+        <div class="connection-panel" id="connectionPanel">
+            <div class="connection-form" id="connectionForm">
+                <h3 class="connection-title">GLOBAL CONNECTION</h3>
+                <form id="globalLoginForm">
+                    <div class="global-login-fields">
+                        <div class="form-field-inline">
+                            <label for="saved_servers">SAVED SERVERS</label>
+                            <select id="saved_servers" style="width: 120px;">
+                                <option value="">-- Select --</option>
+                                <option value="new">+ New Server</option>
+                            </select>
+                        </div>
+                        <div class="form-field-inline">
+                            <label for="global_hostname">HOST</label>
+                            <input type="text" id="global_hostname" placeholder="192.168.1.10" required>
+                        </div>
+                        <div class="form-field-inline">
+                            <label for="global_port">PORT</label>
+                            <input type="number" id="global_port" value="22" required style="width: 70px;">
+                        </div>
+                        <div class="form-field-inline">
+                            <label for="global_username">USER</label>
+                            <input type="text" id="global_username" placeholder="root" required>
+                        </div>
+                        <div class="form-field-inline">
+                            <label for="global_password">PASSWORD</label>
+                            <input type="password" id="global_password" placeholder="******" required>
+                        </div>
+                        <button type="submit" id="globalConnectBtn" class="btn-connect">CONNECT</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Connection Status Indicator -->
+            <div class="connection-status hidden" id="connectionStatus">
+                <div class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span class="status-text" id="statusText">DISCONNECTED</span>
+                </div>
+                <div class="connection-info" id="connectionInfo"></div>
+                <!-- Disconnect Button -->
+                <button type="button" id="globalDisconnectBtn" class="btn-disconnect">DISCONNECT</button>
+            </div>
+        </div>
+
+        <!-- Resource Monitor (Always Visible After Login) -->
+        <div class="resource-monitor-header hidden" id="resourceMonitorHeader">
+            <div class="resource-monitor-compact">
+                <div class="resource-bar-compact cpu">
+                    <span class="resource-name">CPU</span>
+                    <div class="progress-bar-container-compact">
+                        <div class="progress-bar-fill low" id="cpuBarFillHeader" style="width: 0%;"></div>
+                    </div>
+                    <span class="resource-value" id="cpuValueHeader">0%</span>
+                </div>
+                <div class="resource-bar-compact ram">
+                    <span class="resource-name">RAM</span>
+                    <div class="progress-bar-container-compact">
+                        <div class="progress-bar-fill low" id="ramBarFillHeader" style="width: 0%;"></div>
+                    </div>
+                    <span class="resource-value" id="ramValueHeader">0%</span>
+                </div>
+                <div class="resource-bar-compact disk">
+                    <span class="resource-name">DISK</span>
+                    <div class="progress-bar-container-compact">
+                        <div class="progress-bar-fill low" id="diskBarFillHeader" style="width: 0%;"></div>
+                    </div>
+                    <span class="resource-value" id="diskValueHeader">0%</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="modular-main">
+        <!-- Sidebar -->
+        <aside class="module-sidebar">
+            <h3 class="sidebar-title">MODULES</h3>
+
+            <!-- Dynamic Plugins -->
+            {% for mod in modules %}
+            <div class="module-item" draggable="true" data-module-type="{{ mod.id }}">
+                <span class="module-icon">{{ mod.icon | safe | default('🧩') }}</span>
+                <span class="module-name">{{ mod.name }}</span>
+            </div>
+            {% endfor %}
+        </aside>
+
+        <!-- Grid Area Wrapper -->
+        <div class="amiko-grid-wrapper" style="flex: 1; position: relative; overflow: hidden; display: flex;">
+            <!-- Empty State Message -->
+            <div id="emptyGridMessage" class="empty-grid-message">
+                <div class="retro-text">
+                    &gt; SYSTEM STANDBY<br>
+                    &gt; PLEASE DRAG AND DROP MODULES TO BEGIN <span class="blink">_</span>
+                </div>
+            </div>
+
+            <!-- GridStack Container -->
+            <div class="grid-stack" id="amikoGrid" style="flex: 1;"></div>
+        </div>
+    </main>
+
+    <!-- Dynamic Plugin Templates -->
+    {% for mod in modules %}
+    <template id="tpl-{{ mod.id }}">
+        {{ mod.template_html | safe }}
+    </template>
+    {% endfor %}
+
+    <!-- Settings Overlay -->
+    <div class="settings-overlay" id="settingsOverlay">
+        <div class="settings-panel">
+            <div class="settings-header">
+                <h2 style="display: flex; align-items: center; gap: 10px;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path
+                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                        </path>
+                    </svg>
+                    Settings
+                </h2>
+                <button class="settings-close-btn">✕</button>
+            </div>
+            <div class="settings-body">
+                <nav class="settings-tabs">
+                    <button class="settings-tab-btn active" data-tab="groups">
+                        <span class="settings-tab-icon">📁</span> Groups
+                    </button>
+                    <button class="settings-tab-btn" data-tab="servers">
+                        <span class="settings-tab-icon">🖥️</span> Server
+                    </button>
+                    <button class="settings-tab-btn" data-tab="workspace">
+                        <span class="settings-tab-icon">📐</span> Workspace
+                    </button>
+                    <button class="settings-tab-btn" data-tab="themes">
+                        <span class="settings-tab-icon">🎨</span> Themes
+                    </button>
+                </nav>
+                <div class="settings-content">
+                    <!-- Groups Section -->
+                    <div class="settings-section active" data-section="groups">
+                        <h3 class="settings-section-title">Group Management</h3>
+                        <form class="group-form">
+                            <div class="form-field">
+                                <label>Group Name</label>
+                                <input type="text" class="group-name-input" placeholder="E.g: Production Servers">
+                            </div>
+                            <div class="form-field">
+                                <label>Icon</label>
+                                <input type="text" class="group-icon-input icon-input" placeholder="📁" maxlength="2">
+                            </div>
+                            <button type="submit">+ ADD</button>
+                        </form>
+                        <div class="group-list"></div>
+                    </div>
+
+                    <!-- Servers Section (Excel-like) -->
+                    <div class="settings-section" data-section="servers">
+                        <h3 class="settings-section-title">Server Management</h3>
+                        <div class="server-table-wrapper"></div>
+                        <div class="add-server-row">
+                            <form class="add-server-form"
+                                style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+                                <div class="form-field">
+                                    <label>Group</label>
+                                    <select class="field-group"></select>
+                                </div>
+                                <div class="form-field">
+                                    <label>Name</label>
+                                    <input type="text" class="field-name" placeholder="Web Server 1">
+                                </div>
+                                <div class="form-field">
+                                    <label>Hostname</label>
+                                    <input type="text" class="field-host" placeholder="192.168.1.10">
+                                </div>
+                                <div class="form-field">
+                                    <label>Port</label>
+                                    <input type="number" class="field-port" value="22">
+                                </div>
+                                <div class="form-field">
+                                    <label>User</label>
+                                    <input type="text" class="field-user" placeholder="root">
+                                </div>
+                                <div class="form-field">
+                                    <label>Password</label>
+                                    <input type="password" class="field-pass">
+                                </div>
+                                <button type="submit">+ ADD</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Themes Section -->
+                    <div class="settings-section" data-section="themes">
+                        <h3 class="settings-section-title">Theme Management</h3>
+                        <div class="crt-toggle-row">
+                            <label class="crt-toggle-label">
+                                <span class="crt-toggle-title">⬛ CRT EFFECT</span>
+                                <input type="checkbox" class="theme-toggle-checkbox" id="crtToggle" checked>
+                            </label>
+                        </div>
+                        <div class="themes-grid"></div>
+                    </div>
+
+                    <!-- Workspace Section -->
+                    <div class="settings-section" data-section="workspace">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 class="settings-section-title" style="margin: 0;">Workspace Configuration</h3>
+                            <button id="btnClearGrid" type="button"
+                                style="background: rgba(255, 60, 60, 0.1); color: #ff6b6b; border: 1px solid rgba(255, 60, 60, 0.3); padding: 6px 12px; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 0.9em;">🗑️
+                                Clear Grid</button>
+                        </div>
+
+                        <div class="form-field" style="margin-bottom: 20px;">
+                            <label>Startup Behavior</label>
+                            <select id="startupBehaviorSelector"
+                                style="width: 100%; max-width: 300px; padding: 8px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-medium); border-radius: 4px; font-family: monospace;">
+                                <option value="empty">Start with an Empty Dashboard</option>
+                                <option value="last">Load Last Active Layout</option>
+                            </select>
+                        </div>
+
+                        <div class="form-field" style="margin-bottom: 20px;">
+                            <label class="crt-toggle-label"
+                                style="cursor: pointer; display: flex; align-items: center; gap: 10px;">
+                                <span class="crt-toggle-title">🔒 LOCK WORKSPACE</span>
+                                <input type="checkbox" class="theme-toggle-checkbox" id="lockWorkspaceToggle">
+                            </label>
+                            <p style="font-size: 0.8em; color: var(--text-dim); margin-top: 5px;">Prevents accidental
+                                moving or resizing of grid modules.</p>
+                        </div>
+
+                        <h3 class="settings-section-title" style="margin-top: 30px;">Saved Layouts</h3>
+                        <div
+                            style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
+                            <select id="layoutSelector"
+                                style="flex: 1; max-width: 300px; padding: 8px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-medium); border-radius: 4px; font-family: monospace;">
+                                <option value="" disabled selected>-- Select Layout --</option>
+                            </select>
+                            <button id="btnLoadLayout" type="button"
+                                style="background: rgba(41, 128, 185, 0.15); color: #3498db; border: 1px solid rgba(41, 128, 185, 0.4); padding: 8px 15px; border-radius: 4px; cursor: pointer; transition: all 0.2s;">📂
+                                Load Selected</button>
+                            <button id="btnSaveLayout" type="button"
+                                style="background: rgba(0, 180, 80, 0.15); color: #4cff88; border: 1px solid rgba(0, 180, 80, 0.4); padding: 8px 15px; border-radius: 4px; cursor: pointer; transition: all 0.2s;">💾
+                                Save Current</button>
+                            <button id="btnDeleteLayout" type="button"
+                                style="background: rgba(255, 60, 60, 0.1); color: #ff6b6b; border: 1px solid rgba(255, 60, 60, 0.3); padding: 8px 15px; border-radius: 4px; cursor: pointer; transition: all 0.2s;">🗑️
+                                Delete Layout</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        AMIKO v0.1 - Made with <span class="heart">❤️</span>
+    </footer>
+
+    <!-- Library Scripts -->
+    <!-- GridStack JS -->
+    <script src="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack-all.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/winbox@0.2.82/dist/winbox.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='lib/socketio/socket.io.js') }}"></script>
+    <script src="{{ url_for('static', filename='lib/xterm/xterm.js') }}"></script>
+    <script src="{{ url_for('static', filename='lib/xterm/xterm-addon-fit.js') }}"></script>
+
+    <!-- App Scripts -->
+    <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/connection.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/drag-drop.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+
+    <!-- Dynamic Plugin Scripts -->
+    {% for mod in modules %}
+    <script src="/static_modules/{{ mod.id }}/client.js"></script>
+    {% endfor %}
+</body>
+
+</html>

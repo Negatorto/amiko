@@ -1,0 +1,281 @@
+/* Modular Grid and Drag & Drop Styles */
+
+.modular-main {
+    display: flex;
+    flex-direction: row;
+    height: calc(100vh - 150px);
+    /* Adjust based on header/footer */
+    padding: 20px;
+    gap: 20px;
+    overflow: hidden;
+}
+
+/* Sidebar for Modules */
+.module-sidebar {
+    width: 250px;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--text-dim);
+    border-radius: 4px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    box-shadow: inset 0 0 10px var(--glow-primary);
+    overflow-y: auto;
+}
+
+.sidebar-title {
+    color: var(--text-primary);
+    font-size: 1.2rem;
+    text-align: center;
+    border-bottom: 1px dashed var(--text-dim);
+    padding-bottom: 10px;
+    margin-top: 0;
+    text-shadow: 0 0 5px var(--text-dim);
+}
+
+.module-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--text-primary);
+    color: var(--text-primary);
+    border-radius: 4px;
+    cursor: grab;
+    transition: all 0.2s ease;
+}
+
+.module-item:hover {
+    background-color: var(--accent-highlight, var(--accent-warning));
+    border-color: var(--text-primary);
+    color: var(--bg-secondary);
+    box-shadow: 0 0 10px var(--glow-warning);
+}
+
+.module-item:active {
+    cursor: grabbing;
+}
+
+.module-icon {
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.module-name {
+    /* Color inherited from parent to allow hover changes */
+    font-weight: bold;
+}
+
+.grid-stack {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 15px;
+}
+
+.grid-stack-item-content {
+    display: flex;
+    background-color: transparent !important;
+}
+
+.grid-stack-item-removing {
+    opacity: 0.5;
+}
+
+/* Instantiated Module */
+.amiko-module {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--text-primary);
+    border-radius: 4px;
+    box-shadow: inset 0 0 10px var(--glow-primary);
+    animation: mod-appear 0.3s ease-out;
+}
+
+@keyframes mod-appear {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.amiko-module .module-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 10px;
+    background-color: var(--bg-tertiary);
+    border-bottom: 1px solid var(--text-dim);
+    flex-shrink: 0;
+}
+
+.amiko-module .module-title {
+    color: var(--text-primary);
+    font-weight: bold;
+}
+
+.amiko-module .module-actions button {
+    background: none;
+    border: 1px solid var(--text-dim);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.8rem;
+    margin-left: 5px;
+    border-radius: 2px;
+    padding: 2px 5px;
+}
+
+.amiko-module .module-actions button:hover {
+    background-color: var(--accent-highlight, var(--text-primary));
+    border-color: var(--accent-highlight, var(--text-primary));
+    color: var(--bg-primary);
+}
+
+.amiko-module .module-body {
+    flex: 1;
+    min-height: 0;
+    /* Allows flex item to shrink below content size */
+    overflow: hidden;
+    /* Modules handle their own scrolling usually */
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Adapt specific forms inside modules */
+.amiko-module .form-grid {
+    margin-bottom: 10px;
+}
+
+.amiko-module .terminal-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: auto;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+
+.amiko-term {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    position: relative;
+    max-height: none !important;
+    overflow: hidden !important;
+    padding: 5px 5px 0 5px !important;
+    box-sizing: border-box;
+}
+
+.amiko-module[data-module-type="ssh"] .module-body {
+    padding-bottom: 5px;
+}
+
+/* Empty Grid State */
+.empty-grid-message {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: var(--text-dim);
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 1.2rem;
+    pointer-events: none;
+    z-index: 0;
+    text-shadow: 0 0 10px var(--glow-primary, rgba(0,0,0,0.5));
+    transition: opacity 0.5s ease;
+    line-height: 1.5;
+}
+
+.empty-grid-message .retro-text {
+    opacity: 0.6;
+}
+
+.empty-grid-message .blink {
+    animation: mod-cursor-blink 1.2s step-end infinite;
+    display: inline-block;
+    color: var(--accent-amber);
+}
+
+@keyframes mod-cursor-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+/* WinBox Custom AMIKO Theme */
+.wb-amiko {
+    background: rgba(18, 18, 18, 0.95) !important;
+    border: 1px solid var(--border-medium);
+    border-radius: 4px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.8), 0 0 5px var(--glow-primary);
+    backdrop-filter: blur(10px);
+}
+
+.wb-amiko .wb-header {
+    background: rgba(10, 10, 10, 0.9);
+    border-bottom: 1px dashed var(--border-medium);
+}
+
+.wb-amiko .wb-title {
+    font-family: monospace;
+    color: var(--accent-amber);
+    font-size: 0.9rem;
+    font-weight: normal;
+}
+
+.wb-amiko .wb-body {
+    background: transparent;
+    color: var(--text-primary);
+    font-family: inherit;
+}
+
+/* Make WinBox modal overlay look retro */
+#winbox-overlay {
+    background: rgba(0, 0, 0, 0.7) !important;
+    backdrop-filter: blur(4px);
+}
+
+/* Notes Module Status Bar */
+.mod-notes-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 10px;
+    background-color: var(--bg-tertiary);
+    border-bottom: 1px solid var(--text-dim);
+    font-size: 0.75rem;
+    font-family: monospace;
+    flex-shrink: 0;
+}
+
+.mod-notes-host {
+    color: var(--text-primary);
+    font-weight: bold;
+}
+
+.mod-notes-status {
+    color: var(--text-dim);
+}
+
+.mod-notes-textarea:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}

@@ -1,0 +1,33 @@
+/**
+ * AMIKO Synthwave Theme
+ * "The future is now." - Kavinsky
+ * Inspired by 80s retrowave: neon pink, electric purple, chrome blue on midnight
+ */
+
+:root {
+    /* Backgrounds — deep midnight purple */
+    --bg-primary: #0e0b1e;
+    --bg-secondary: #1a1535;
+    --bg-tertiary: #252048;
+
+    /* Text & Outlines — hot neon pink */
+    --text-primary: #ff2975;
+    --text-secondary: #00d4ff;
+    --text-dim: rgba(255, 41, 117, 0.4);
+
+    /* Semantic Accents */
+    --accent-warning: #ffe156cc;
+    --accent-danger: #ff0055cc;
+    --accent-info: #00d4ffbb;
+
+    /* Effects & Border — purple/pink neon glow */
+    --border: rgba(161, 55, 255, 0.35);
+    --glow-primary: rgba(255, 41, 117, 0.35);
+    --glow-warning: rgba(255, 225, 86, 0.25);
+
+    /* Typography */
+    --font-mono: 'Courier New', 'Consolas', 'Monaco', monospace;
+    --font-size-base: 16px;
+    --font-size-large: 18px;
+    --font-size-small: 14px;
+}

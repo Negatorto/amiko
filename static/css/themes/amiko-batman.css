@@ -1,0 +1,32 @@
+/**
+ * AMIKO Batman Theme
+ * "I am vengeance. I am the night." - Batman
+ */
+
+:root {
+    /* Backgrounds: The deep shadows of Gotham */
+    --bg-primary: #0a0a0a;
+    --bg-secondary: #1a1a1a;
+    --bg-tertiary: #272727;
+
+    /* Text & Outlines: Tactical UI */
+    --text-primary: #d1d1d1;
+    --text-secondary: #8c8c8c;
+    --text-dim: #454545;
+
+    /* Semantic Accents: The Bat-Signal */
+    --accent-warning: #fce205;
+    --accent-danger: #b30000;
+    --accent-info: #0066cc;
+
+    /* Effects & Border: Stealth mode */
+    --border: #333333;
+    --glow-primary: rgba(252, 226, 5, 0.15);
+    --glow-warning: rgba(252, 226, 5, 0.4);
+
+    /* Typography */
+    --font-mono: 'Courier New', 'Consolas', 'Monaco', monospace;
+    --font-size-base: 17px;
+    --font-size-large: 18px;
+    --font-size-small: 15px;
+}

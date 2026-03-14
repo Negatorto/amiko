@@ -1,0 +1,9 @@
+{
+    "name": "Large Files",
+    "icon": "<svg viewBox='-5 -5 40 35' width='28' height='28' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'><path d='M5 0 L25 0 L30 20 L0 20 Z'/><path d='M10 0 A5 5 0 0 1 20 0'/><text x='15' y='15' font-family='Arial, sans-serif' font-size='10' text-anchor='middle' fill='currentColor' stroke='none'>MB</text></svg>",
+    "enabled": true,
+    "index": 20,
+    "description": "Analyzes the disk of remote servers to find huge folders or files occupying too much space.",
+    "author": "Alessio Saponaro",
+    "site": ""
+}
