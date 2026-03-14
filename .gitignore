@@ -13,6 +13,7 @@ venv/
 env/
 
 # AMIKO personal data
+data/
 
 # IDE / Editor
 .vscode/
