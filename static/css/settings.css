@@ -1,0 +1,668 @@
+/*
+ * AMIKO - Settings Panel CSS
+ * Full-screen modal with tabs: Groups, Servers (Excel-like), Themes
+ */
+
+/* Overlay */
+.settings-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background-color: rgba(0, 0, 0, 0.85);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    animation: settingsFadeIn 0.3s ease;
+}
+
+.settings-overlay.active {
+    display: flex;
+}
+
+/* CRT Scanline Effect on Settings Panel */
+.settings-panel::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 9999;
+    border-radius: 8px;
+    background: repeating-linear-gradient(0deg,
+            rgba(0, 0, 0, 0.15) 0px,
+            rgba(0, 0, 0, 0.15) 1px,
+            transparent 1px,
+            transparent 2px);
+}
+
+/* CRT Screen Glow on Settings Panel */
+.settings-panel::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 9998;
+    border-radius: 8px;
+    background: radial-gradient(ellipse at center,
+            transparent 0%,
+            rgba(0, 0, 0, 0.3) 100%);
+}
+
+/* CRT disabled on settings panel */
+.no-crt .settings-panel::before,
+.no-crt .settings-panel::after {
+    display: none !important;
+}
+
+@keyframes settingsFadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Main Panel */
+.settings-panel {
+    width: 90vw;
+    max-width: 1200px;
+    height: 85vh;
+    background-color: var(--bg-primary);
+    border: 2px solid var(--text-primary);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 40px var(--glow-primary);
+    overflow: hidden;
+    animation: settingsSlideIn 0.3s ease;
+    position: relative;
+}
+
+@keyframes settingsSlideIn {
+    from {
+        transform: translateY(30px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Panel Header */
+.settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 25px;
+    background-color: var(--bg-secondary);
+    border-bottom: 2px solid var(--text-primary);
+}
+
+.settings-header h2 {
+    color: var(--text-primary);
+    font-size: 1.3rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px var(--glow-primary);
+    margin: 0;
+}
+
+.settings-close-btn {
+    background: none;
+    border: 1px solid var(--text-dim);
+    color: var(--text-primary);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 5px 12px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.settings-close-btn:hover {
+    background-color: var(--accent-danger);
+    border-color: var(--accent-danger);
+    color: var(--bg-primary);
+}
+
+/* Layout: Sidebar + Content */
+.settings-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* Tab Sidebar */
+.settings-tabs {
+    width: 200px;
+    background-color: var(--bg-secondary);
+    border-right: 1px solid var(--text-dim);
+    display: flex;
+    flex-direction: column;
+    padding: 15px 0;
+}
+
+.settings-tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    background: none;
+    border: none;
+    border-left: 3px solid transparent;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-base);
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.settings-tab-btn:hover {
+    color: var(--text-primary);
+    background-color: var(--bg-tertiary);
+    border-color: transparent;
+    box-shadow: none;
+}
+
+.settings-tab-btn.active {
+    color: var(--text-primary);
+    border-left-color: var(--text-primary);
+    background-color: var(--bg-primary);
+    text-shadow: 0 0 5px var(--glow-primary);
+}
+
+.settings-tab-icon {
+    font-size: 1.2rem;
+}
+
+/* Content Area */
+.settings-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 25px;
+}
+
+.settings-section {
+    display: none;
+}
+
+.settings-section.active {
+    display: block;
+}
+
+.settings-section-title {
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* --- Groups Tab --- */
+.group-form {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    align-items: flex-end;
+}
+
+.group-form .form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.group-form .form-field label {
+    font-size: var(--font-size-small);
+    color: var(--text-dim);
+}
+
+.group-form input {
+    padding: 8px 12px;
+    width: 200px;
+}
+
+.group-form .icon-input {
+    width: 60px;
+    text-align: center;
+    font-size: 1.2rem;
+}
+
+.group-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.group-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--text-dim);
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.group-card:hover {
+    border-color: var(--text-primary);
+    box-shadow: 0 0 8px var(--glow-primary);
+}
+
+.group-card-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.group-card-icon {
+    font-size: 1.5rem;
+}
+
+.group-card-name {
+    color: var(--text-primary);
+    font-weight: bold;
+}
+
+.group-card-count {
+    color: var(--text-dim);
+    font-size: var(--font-size-small);
+    margin-left: 8px;
+}
+
+.group-card-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.group-card-actions button {
+    padding: 4px 10px;
+    font-size: var(--font-size-small);
+    border: 1px solid var(--text-dim);
+    background: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-radius: 2px;
+}
+
+.group-card-actions button:hover {
+    border-color: var(--text-primary);
+    color: var(--text-primary);
+}
+
+.group-card-actions .btn-delete:hover {
+    border-color: var(--accent-danger);
+    color: var(--accent-danger);
+    background-color: transparent;
+}
+
+/* --- Servers Tab (Excel-like Table) --- */
+.server-table-wrapper {
+    overflow-x: auto;
+    border: 1px solid var(--text-dim);
+    border-radius: 4px;
+}
+
+.server-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-base);
+    font-family: var(--font-mono);
+}
+
+.server-table thead {
+    background-color: var(--bg-secondary);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.server-table th {
+    padding: 10px 12px;
+    text-align: left;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    font-size: var(--font-size-small);
+    letter-spacing: 1px;
+    border-bottom: 2px solid var(--text-primary);
+    white-space: nowrap;
+}
+
+.server-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--text-dim);
+    color: var(--text-primary);
+    position: relative;
+}
+
+.server-table tr:hover td {
+    background-color: var(--bg-secondary);
+}
+
+/* Group header row */
+.server-table .group-row td {
+    background-color: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-weight: bold;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--text-primary);
+    font-size: 0.95rem;
+}
+
+/* Editable cells */
+.server-table .cell-editable {
+    cursor: text;
+    padding: 6px 8px;
+    border-radius: 2px;
+    transition: background-color 0.15s;
+    min-width: 80px;
+}
+
+.server-table .cell-editable:hover {
+    background-color: var(--bg-tertiary);
+    outline: 1px dashed var(--text-dim);
+}
+
+.server-table .cell-editable:focus {
+    outline: 2px solid var(--text-primary);
+    background-color: var(--bg-secondary);
+    box-shadow: 0 0 6px var(--glow-primary);
+}
+
+.server-table .cell-editable.cell-password {
+    font-family: monospace;
+    letter-spacing: 3px;
+}
+
+/* Action buttons in table */
+.server-table .row-actions {
+    display: flex;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.server-table .row-actions button {
+    padding: 3px 8px;
+    font-size: var(--font-size-small);
+    border: 1px solid var(--text-dim);
+    background: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-radius: 2px;
+}
+
+.server-table .row-actions button:hover {
+    border-color: var(--text-primary);
+    color: var(--text-primary);
+}
+
+.server-table .row-actions .btn-delete:hover {
+    border-color: var(--accent-danger);
+    color: var(--accent-danger);
+    background-color: transparent;
+}
+
+.server-table .row-actions .btn-use:hover {
+    border-color: var(--accent-info);
+    color: var(--accent-info);
+    background-color: transparent;
+}
+
+/* Add server row */
+.add-server-row {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.add-server-row .form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.add-server-row .form-field label {
+    font-size: var(--font-size-small);
+    color: var(--text-dim);
+}
+
+.add-server-row input,
+.add-server-row select {
+    padding: 8px 10px;
+}
+
+.add-server-row .field-name {
+    width: 140px;
+}
+
+.add-server-row .field-host {
+    width: 150px;
+}
+
+.add-server-row .field-port {
+    width: 70px;
+}
+
+.add-server-row .field-user {
+    width: 100px;
+}
+
+.add-server-row .field-pass {
+    width: 120px;
+}
+
+/* --- Themes Tab --- */
+.themes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 20px;
+}
+
+.theme-card {
+    background-color: var(--bg-secondary);
+    border: 2px solid var(--text-dim);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: all 0.3s;
+    display: flex;
+    flex-direction: column;
+}
+
+.theme-card:hover {
+    border-color: var(--text-primary);
+    box-shadow: 0 0 15px var(--glow-primary);
+}
+
+.theme-card.is-active {
+    border-color: var(--text-primary);
+    box-shadow: 0 0 20px var(--glow-primary);
+}
+
+
+
+/* Color Preview Strip */
+.theme-preview {
+    height: 70px;
+    display: flex;
+    position: relative;
+}
+
+.theme-preview-swatch {
+    flex: 1;
+}
+
+.theme-card-body {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex: 1;
+}
+
+.theme-card-info {
+    flex: 1;
+}
+
+.theme-card-name {
+    color: var(--text-primary);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.95rem;
+}
+
+.theme-card-quote {
+    color: var(--text-dim);
+    font-size: var(--font-size-small);
+    font-style: italic;
+}
+
+.theme-card-actions {
+    display: flex;
+    margin-top: auto;
+    justify-content: center;
+    padding-top: 5px;
+}
+
+/* CRT Effect Toggle Row */
+.crt-toggle-row {
+    margin-bottom: 20px;
+    padding: 12px 16px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--text-dim);
+    border-radius: 4px;
+}
+
+.crt-toggle-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+}
+
+.crt-toggle-title {
+    color: var(--text-primary);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-size: 0.95rem;
+}
+
+
+
+/* Theme Toggle Checkbox */
+.theme-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    flex: 1;
+    justify-content: center;
+    padding: 4px 0;
+}
+
+.theme-toggle-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 38px;
+    height: 20px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--text-dim);
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.3s;
+    flex-shrink: 0;
+}
+
+.theme-toggle-checkbox::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background-color: var(--text-dim);
+    border-radius: 50%;
+    transition: all 0.3s;
+}
+
+.theme-toggle-checkbox:checked {
+    background-color: var(--text-primary);
+    border-color: var(--text-primary);
+    box-shadow: 0 0 8px var(--glow-primary);
+}
+
+.theme-toggle-checkbox:checked::after {
+    left: 20px;
+    background-color: var(--bg-primary);
+}
+
+.theme-toggle-checkbox:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Settings Button in Header */
+.btn-settings {
+    background: none;
+    border: 1px solid var(--text-dim);
+    color: var(--text-primary);
+    font-size: 1.3rem;
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-settings:hover {
+    border-color: var(--text-primary);
+    box-shadow: 0 0 10px var(--glow-primary);
+}
+
+.btn-settings-label {
+    font-size: var(--font-size-small);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Empty state */
+.settings-empty {
+    color: var(--text-dim);
+    text-align: center;
+    padding: 40px;
+    font-style: italic;
+}
+
+/* Status badge */
+.badge-active {
+    background-color: var(--text-primary);
+    color: var(--bg-primary);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-left: 8px;
+    font-weight: bold;
+}

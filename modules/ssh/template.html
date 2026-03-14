@@ -1,0 +1,19 @@
+<div class="amiko-module" data-module-type="ssh">
+    <div class="module-header">
+        <span class="module-title">💻 SSH Terminal</span>
+        <div class="module-actions">
+            <button class="btn-expand" title="Expand/Collapse">⤢</button>
+            <button class="btn-close" title="Close Module">❌</button>
+        </div>
+    </div>
+    <div class="module-body">
+        <div class="ssh-notice" style="margin-bottom: 5px;">
+            <p style="margin: 0; font-size: 0.9em; opacity: 0.8;">SSH Terminal active. Use the command line
+                below to execute commands on the server.</p>
+        </div>
+        <div class="terminal-container" style="flex:1; border: 1px solid var(--crt-phosphor-dim);">
+            <!-- Xterm.js Container -->
+            <div class="amiko-term terminal-body" style="height: 100%;"></div>
+        </div>
+    </div>
+</div>

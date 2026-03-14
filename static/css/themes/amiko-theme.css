@@ -1,0 +1,38 @@
+/**
+ * AMIKO Base Theme
+ * Light theme — teal & red accents on clean white/gray
+ * Priority: maximum readability
+ */
+
+:root {
+    /* Backgrounds — clean light grays, easy on the eyes */
+    --bg-primary: #f4f5f7;
+    --bg-secondary: #e8eaed;
+    --bg-tertiary: #d3d6db;
+
+    /* Text & Outlines — dark gray for maximum readability */
+    --text-primary: #2d3436;
+    --text-secondary: #0d7377;
+    --text-dim: rgba(45, 52, 54, 0.4);
+
+    /* Semantic Accents — teal (ottanio) & red */
+    --accent-warning: #0d7377;
+    --accent-danger: #c0392b;
+    --accent-info: #0a9396;
+
+    /* Highlight — teal for interactive elements */
+    --accent-highlight: #0d7377;
+    --accent-amber: #0d7377;
+
+    /* Effects & Border — subtle dark gray lines */
+    --border: rgba(45, 52, 54, 0.2);
+    --border-medium: rgba(45, 52, 54, 0.15);
+    --glow-primary: rgba(13, 115, 119, 0.1);
+    --glow-warning: rgba(13, 115, 119, 0.15);
+
+    /* Typography */
+    --font-mono: 'Courier New', 'Consolas', 'Monaco', monospace;
+    --font-size-base: 16px;
+    --font-size-large: 18px;
+    --font-size-small: 14px;
+}

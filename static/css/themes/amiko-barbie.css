@@ -1,0 +1,32 @@
+/**
+ * AMIKO Barbie Theme
+ * "Come on Barbie, let's go party!" - Aqua
+ */
+
+:root {
+    /* Backgrounds: Dreamhouse */
+    --bg-primary: #ffe6f2;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #ffcce6;
+
+    /* Text & Outlines: Plastic Fantastic */
+    --text-primary: #cc0066;
+    --text-secondary: #ff3399;
+    --text-dim: #ff99cc;
+
+    /* Semantic Accents: Perfect Accessories */
+    --accent-warning: #ff3399;
+    --accent-danger: #ff0000;
+    --accent-info: #00ccff;
+
+    /* Effects & Border: Glamour */
+    --border: #ffb3d9;
+    --glow-primary: rgba(255, 51, 153, 0.2);
+    --glow-warning: rgba(255, 0, 255, 0.4);
+
+    /* Typography */
+    --font-mono: 'Courier New', 'Consolas', 'Monaco', monospace;
+    --font-size-base: 17px;
+    --font-size-large: 18px;
+    --font-size-small: 15px;
+}

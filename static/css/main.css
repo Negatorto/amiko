@@ -1,0 +1,440 @@
+/* 
+ * AMIKO - Main CSS
+ * Structural Styling & Base Layout Elements
+ * Design tokens (colors) are now loaded from the themes/ directory.
+ */
+
+/* Reset and Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-mono);
+    font-weight: var(--font-weight-normal, 400);
+    /* Fallback to 400 if not defined in other themes */
+    font-size: var(--font-size-base);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* CRT Scanline Effect */
+body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 9999;
+    background: repeating-linear-gradient(0deg,
+            rgba(0, 0, 0, 0.15) 0px,
+            rgba(0, 0, 0, 0.15) 1px,
+            transparent 1px,
+            transparent 2px);
+}
+
+/* CRT Screen Glow */
+body::after {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 9998;
+    background: radial-gradient(ellipse at center,
+            transparent 0%,
+            rgba(0, 0, 0, 0.3) 100%);
+}
+
+/* CRT effect disabled */
+body.no-crt::before,
+body.no-crt::after {
+    display: none !important;
+}
+
+/* Header with Logo */
+header {
+    background-color: var(--bg-secondary);
+    border-bottom: 2px solid var(--text-primary);
+    padding: 15px 30px;
+    box-shadow: 0 0 20px var(--glow-primary);
+    position: relative;
+    z-index: 100;
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.logo-img {
+    height: 75px;
+    width: auto;
+    filter: drop-shadow(0 0 10px var(--glow-primary));
+}
+
+.app-title {
+    font-size: 22px;
+    font-weight: var(--font-weight-bold, bold);
+    color: var(--text-primary);
+    text-shadow: 0 0 10px var(--glow-primary);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.app-subtitle {
+    font-size: var(--font-size-base);
+    color: var(--text-secondary);
+    font-weight: normal;
+}
+
+/* Main Content */
+main {
+    flex: 1;
+    padding: 20px;
+    position: relative;
+    z-index: 1;
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+/* Form Elements */
+input[type="text"],
+input[type="number"],
+input[type="password"],
+select {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--text-dim);
+    color: var(--text-primary);
+    padding: 10px 15px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-base);
+    border-radius: 0;
+    outline: none;
+    transition: all 0.3s;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="password"]:focus,
+select:focus {
+    border-color: var(--text-primary);
+    box-shadow: 0 0 10px var(--glow-primary);
+}
+
+input::placeholder {
+    color: var(--text-dim);
+}
+
+label {
+    color: var(--text-secondary);
+    font-size: var(--font-size-small);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: block;
+    margin-bottom: 5px;
+}
+
+/* Buttons */
+button {
+    background-color: var(--bg-secondary);
+    border: 2px solid var(--text-primary);
+    color: var(--text-primary);
+    padding: 10px 25px;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-bold, bold);
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.3s;
+    position: relative;
+}
+
+button:hover {
+    background-color: var(--accent-highlight, var(--text-primary));
+    /* Fallback to text primary if no highlight var */
+    border-color: var(--accent-highlight, var(--text-primary));
+    color: var(--bg-primary);
+    box-shadow: 0 0 20px var(--glow-primary);
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+button:disabled {
+    border-color: var(--text-dim);
+    color: var(--text-dim);
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+button:disabled:hover {
+    background-color: var(--bg-secondary);
+    color: var(--text-dim);
+}
+
+/* Accent Buttons */
+button.btn-warning {
+    border-color: var(--accent-warning);
+    color: var(--accent-warning);
+}
+
+button.btn-warning:hover {
+    background-color: var(--accent-warning);
+    color: var(--bg-primary);
+    box-shadow: 0 0 20px var(--glow-warning);
+}
+
+/* Footer */
+footer {
+    background-color: var(--bg-secondary);
+    border-top: 1px solid var(--text-dim);
+    padding: 15px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: var(--font-size-base);
+}
+
+footer .heart {
+    color: var(--accent-danger);
+    animation: heartbeat 1.5s infinite;
+}
+
+@keyframes heartbeat {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.1);
+    }
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--text-dim);
+    border: 1px solid var(--text-primary);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+    box-shadow: 0 0 10px var(--glow-primary);
+}
+
+/* Utility Classes */
+.hidden {
+    display: none !important;
+}
+
+.glow-text {
+    text-shadow: 0 0 10px currentColor;
+}
+
+.text-warning {
+    color: var(--accent-warning);
+}
+
+.text-danger {
+    color: var(--accent-danger);
+}
+
+.text-info {
+    color: var(--accent-info);
+}
+
+/* Xterm.js Terminal Container */
+.terminal-container {
+    height: 500px;
+    /* Altezza fissa per il terminale */
+    background-color: #000;
+    border: 1px solid var(--text-dim);
+    padding: 5px;
+    margin-top: 10px;
+    overflow: hidden;
+    /* Xterm gestisce lo scroll */
+    position: relative;
+}
+
+/* Header style for terminal */
+.terminal-header {
+    background-color: var(--bg-secondary);
+    padding: 5px 10px;
+    border-bottom: 1px solid var(--text-dim);
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: -5px -5px 5px -5px;
+    /* Compensate padding */
+}
+
+#terminal {
+    width: 100%;
+    height: calc(100% - 30px);
+    /* Adjust for header */
+}
+
+/* Xterm overrides for CRT theme */
+.xterm-viewport {
+    background-color: transparent !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    :root {
+        --font-size-base: 12px;
+        --font-size-large: 14px;
+        --font-size-small: 10px;
+    }
+
+    header {
+        padding: 10px 15px;
+    }
+
+    .header-content {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .logo-img {
+        height: 60px;
+    }
+
+    .app-title {
+        font-size: 18px;
+    }
+
+    main {
+        padding: 10px;
+    }
+}
+
+/* --- Global WinBox Theme Overrides --- */
+.winbox.wb-amiko {
+    background: var(--bg-secondary) !important;
+    border: 2px solid var(--text-primary) !important;
+    box-shadow: 0 0 15px var(--glow-primary) !important;
+    border-radius: 0 !important;
+}
+
+/* Retro Inner Frame */
+.winbox.wb-amiko::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    right: 3px;
+    bottom: 3px;
+    border: 1px solid var(--text-primary);
+    pointer-events: none;
+    z-index: 9999; /* Ensure it stays above content */
+}
+
+/* Remove inner frame for Explorer popup */
+.winbox.wb-amiko.wb-amiko-explorer::after {
+    display: none !important;
+}
+
+.winbox.wb-amiko .wb-header {
+    background: var(--bg-primary) !important;
+    color: var(--text-primary) !important;
+    border-bottom: 1px solid var(--text-primary) !important;
+}
+
+.winbox.wb-amiko .wb-title {
+    font-family: var(--font-mono) !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+    color: var(--text-primary) !important;
+    text-transform: uppercase !important;
+}
+
+.winbox.wb-amiko .wb-body {
+    background: var(--bg-primary) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Hover effects for custom controls */
+.winbox.wb-amiko .wb-control * {
+    transition: all 0.2s;
+}
+.winbox.wb-amiko .wb-control *:hover {
+    transform: scale(1.2);
+}
+
+/* Alert Specific Styles */
+.winbox.wb-amiko-error { border-color: var(--accent-danger) !important; box-shadow: 0 0 15px var(--accent-danger) !important; }
+.winbox.wb-amiko-error .wb-header { border-bottom-color: var(--accent-danger) !important; color: var(--accent-danger) !important; }
+.winbox.wb-amiko-error::after { border-color: var(--accent-danger) !important; }
+
+.winbox.wb-amiko-success { border-color: var(--text-primary) !important; box-shadow: 0 0 15px var(--glow-primary) !important; }
+.winbox.wb-amiko-success .wb-header { border-bottom-color: var(--text-primary) !important; color: var(--text-primary) !important; }
+.winbox.wb-amiko-success::after { border-color: var(--text-primary) !important; }
+
+.winbox.wb-amiko-warning { border-color: var(--accent-warning) !important; box-shadow: 0 0 15px var(--accent-warning) !important; }
+.winbox.wb-amiko-warning .wb-header { border-bottom-color: var(--accent-warning) !important; color: var(--accent-warning) !important; }
+.winbox.wb-amiko-warning::after { border-color: var(--accent-warning) !important; }
+
+.amiko-alert-content {
+    padding: 20px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-base, 14px);
+    color: inherit;
+    border-top: 2px solid currentColor;
+    background: var(--bg-primary);
+    overflow-y: auto;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    box-sizing: border-box;
+}
+.winbox.wb-amiko-error .amiko-alert-content { color: var(--accent-danger); }
+.winbox.wb-amiko-success .amiko-alert-content { color: var(--text-primary); }
+.winbox.wb-amiko-warning .amiko-alert-content { color: var(--accent-warning); }
+
+/* Remove WinBox controls we don't need on alerts */
+.winbox.wb-amiko-error .wb-min, .winbox.wb-amiko-error .wb-max, .winbox.wb-amiko-error .wb-full,
+.winbox.wb-amiko-success .wb-min, .winbox.wb-amiko-success .wb-max, .winbox.wb-amiko-success .wb-full,
+.winbox.wb-amiko-warning .wb-min, .winbox.wb-amiko-warning .wb-max, .winbox.wb-amiko-warning .wb-full {
+    display: none !important;
+}

@@ -1,0 +1,188 @@
+/*
+ * AMIKO - Resource Bars CSS
+ * Retro-styled system resource monitoring bars
+ * For SSH Monitor
+ */
+
+.resource-monitor {
+    margin-top: 20px;
+    padding: 20px;
+    background-color: var(--bg-secondary);
+    border: 2px solid var(--text-dim);
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.resource-monitor-title {
+    font-size: var(--font-size-base);
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 15px;
+    text-shadow: 0 0 10px var(--glow-primary);
+    border-bottom: 1px solid var(--text-dim);
+    padding-bottom: 10px;
+}
+
+.resource-monitor-title::before {
+    content: "▶ ";
+    color: var(--accent-amber);
+}
+
+.resource-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.resource-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.resource-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--font-size-small);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.resource-label-name {
+    font-weight: bold;
+}
+
+.resource-label-value {
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+}
+
+/* Progress Bar Container */
+.progress-bar-container {
+    width: 100%;
+    height: 24px;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--text-dim);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Progress Bar Fill */
+.progress-bar-fill {
+    height: 100%;
+    background-color: var(--text-primary);
+    transition: width 0.5s ease, background-color 0.5s ease;
+    position: relative;
+    box-shadow: 0 0 15px var(--glow-primary);
+}
+
+/* Progress Bar with Striped Pattern */
+.progress-bar-fill::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(45deg,
+            transparent,
+            transparent 10px,
+            rgba(0, 0, 0, 0.1) 10px,
+            rgba(0, 0, 0, 0.1) 20px);
+}
+
+/* Color Thresholds */
+.progress-bar-fill.low {
+    background-color: var(--text-primary);
+    box-shadow: 0 0 15px var(--glow-primary);
+}
+
+.progress-bar-fill.medium {
+    background-color: var(--accent-amber);
+    box-shadow: 0 0 15px var(--glow-amber);
+}
+
+.progress-bar-fill.high {
+    background-color: var(--accent-red);
+    box-shadow: 0 0 15px rgba(255, 51, 51, 0.4);
+}
+
+/* Specific Resource Icons */
+.resource-bar.cpu .resource-label-name::before {
+    content: "";
+}
+
+.resource-bar.ram .resource-label-name::before {
+    content: "";
+}
+
+.resource-bar.disk .resource-label-name::before {
+    content: "";
+}
+
+.resource-bar.network .resource-label-name::before {
+    content: "";
+}
+
+/* Loading State */
+.resource-bar.loading .progress-bar-fill {
+    animation: loading-shimmer 1.5s infinite;
+}
+
+@keyframes loading-shimmer {
+    0% {
+        opacity: 0.5;
+    }
+
+    50% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0.5;
+    }
+}
+
+/* Grid Layout for Resources */
+.resource-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+}
+
+/* Compact Resource Bar */
+.resource-bar.compact {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+}
+
+.resource-bar.compact .resource-label {
+    min-width: 100px;
+    flex-direction: column;
+    gap: 0;
+}
+
+.resource-bar.compact .progress-bar-container {
+    flex: 1;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .resource-monitor {
+        padding: 15px;
+    }
+
+    .resource-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .progress-bar-container {
+        height: 20px;
+    }
+
+    .resource-label {
+        font-size: 10px;
+    }
+}

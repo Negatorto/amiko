@@ -1,0 +1,196 @@
+/* 
+ * AMIKO - Global Connection Panel CSS
+ * Unified login system styles
+ */
+
+/* Connection Panel */
+.connection-panel {
+    margin: 15px auto 0;
+    padding: 15px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--text-dim);
+    border-radius: 0;
+    max-width: 1400px;
+    width: 100%;
+}
+
+.connection-title {
+    font-size: var(--font-size-base);
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+    text-shadow: 0 0 10px var(--glow-primary);
+}
+
+/* Global Login Form */
+.global-login-fields {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.form-field-inline {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.form-field-inline label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.form-field-inline input,
+.form-field-inline select {
+    padding: 8px 12px;
+    font-size: var(--font-size-small);
+}
+
+.btn-connect,
+.btn-disconnect {
+    padding: 8px 20px;
+    font-size: var(--font-size-small);
+}
+
+.btn-disconnect {
+    border: 1px solid var(--accent-red);
+    color: var(--accent-red);
+    text-shadow: 0 0 5px var(--accent-red);
+    box-shadow: 0 0 5px rgba(255, 51, 51, 0.2);
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.btn-disconnect:hover {
+    background-color: var(--accent-red);
+    color: #fff;
+    /* White text on red background */
+    box-shadow: 0 0 15px var(--accent-red);
+}
+
+/* Connection Status */
+.connection-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: var(--accent-red);
+    box-shadow: 0 0 10px var(--accent-red);
+    animation: pulse 2s infinite;
+}
+
+.status-dot.connected {
+    background-color: var(--text-primary);
+    box-shadow: 0 0 10px var(--glow-primary);
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.status-text {
+    font-size: var(--font-size-base);
+    color: var(--text-primary);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.connection-info {
+    font-size: var(--font-size-small);
+    color: var(--text-secondary);
+}
+
+/* Resource Monitor Header (Compact) */
+.resource-monitor-header {
+    margin: 15px auto 0;
+    padding: 10px 15px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--text-dim);
+    max-width: 1400px;
+    width: 100%;
+}
+
+.resource-monitor-compact {
+    display: flex;
+    gap: 20px;
+    justify-content: space-between;
+}
+
+.resource-bar-compact {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+
+.resource-name {
+    font-size: 10px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: bold;
+    min-width: 40px;
+}
+
+.progress-bar-container-compact {
+    flex: 1;
+    height: 16px;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--text-dim);
+    position: relative;
+    overflow: hidden;
+}
+
+.resource-value {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-primary);
+    min-width: 35px;
+    text-align: right;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .global-login-fields {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .form-field-inline {
+        width: 100%;
+    }
+
+    .form-field-inline input {
+        width: 100%;
+    }
+
+    .resource-monitor-compact {
+        flex-direction: column;
+        gap: 10px;
+    }
+}

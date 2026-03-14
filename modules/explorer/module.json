@@ -1,0 +1,9 @@
+{
+    "name": "Explorer",
+    "icon": "<svg viewBox='0 0 40 40' width='28' height='28' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'><path d='M4 8 L4 32 L36 32 L36 12 L18 12 L14 8 Z'/><line x1='14' y1='20' x2='26' y2='20'/><line x1='14' y1='25' x2='22' y2='25'/></svg>",
+    "enabled": true,
+    "index": 15,
+    "description": "A point-and-click file browser to navigate remote filesystems, browse directories, and view text file contents.",
+    "author": "Alessio Saponaro",
+    "site": ""
+}

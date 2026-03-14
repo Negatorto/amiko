@@ -1,0 +1,9 @@
+{
+    "name": "Notes App",
+    "icon": "<svg viewBox='0 0 40 50' width='28' height='28' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'><rect x='5' y='5' width='30' height='35' rx='3'/><path d='M8 5 A2 2 0 0 1 12 5 M14 5 A2 2 0 0 1 18 5 M20 5 A2 2 0 0 1 24 5 M26 5 A2 2 0 0 1 30 5'/><line x1='10' y1='15' x2='30' y2='15'/><line x1='10' y1='20' x2='30' y2='20'/><line x1='10' y1='25' x2='30' y2='25'/><line x1='10' y1='30' x2='30' y2='30'/></svg>",
+    "enabled": true,
+    "index": 30,
+    "description": "A flexible notepad with temporary auto-saving for quickly jotting down paths or useful data.",
+    "author": "Alessio Saponaro",
+    "site": ""
+}
