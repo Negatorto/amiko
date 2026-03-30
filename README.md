@@ -6,7 +6,7 @@
 
 **Advanced Multi-function Interface Kit for Operations**
 
-AMIKO is a modular, web-based dashboard for remote server management. It provides a drag-and-drop workspace where each tool — file explorer, SSH terminal, keyword search, and more — runs as an independent, self-contained module.
+AMIKO is a modular, web-based dashboard for remote server management. It provides a drag-and-drop workspace where each tool runs as an independent, self-contained module.
 
 Built with Flask and WebSocket, it connects to remote servers via SSH/SFTP and presents all operations through a single, unified interface.
 
@@ -17,7 +17,6 @@ Built with Flask and WebSocket, it connects to remote servers via SSH/SFTP and p
 - **Modular architecture** — each tool is an isolated plugin with its own UI, logic, and optional backend routes. Modules are auto-discovered at startup.
 - **Drag-and-drop workspace** — arrange modules freely on a grid layout powered by GridStack.js. Save, load, and switch between workspace configurations.
 - **Global connection** — connect once, and all modules share the same SSH/SFTP session. No need to re-enter credentials per tool.
-- **Theme system** — switch between visual themes on the fly. Includes both dark and light presets.
 - **Persistent settings** — server profiles, workspace layouts, and preferences are saved across sessions.
 
 ## Included Modules
@@ -67,6 +66,12 @@ The server starts at `http://localhost:5423`.
 ```
 amiko/
 ├── app.py                  # Main server entry point
+├── core/                   # Core application modules
+│   ├── __init__.py         # App factory and SocketIO init
+│   ├── config.py           # Globals and settings
+│   ├── plugins.py          # Module auto-discovery logic
+│   ├── routes.py           # HTTP endpoints
+│   └── handlers.py         # WebSocket events
 ├── requirements.txt
 ├── templates/
 │   └── index.html          # Application shell
@@ -91,9 +96,7 @@ amiko/
 
 ### Themes
 
-AMIKO ships with 8 themes, ranging from dark terminals to light palettes. Each theme is a standalone CSS file in `static/css/themes/` that overrides a set of CSS custom properties (colors, borders, glows). You can create a new theme by duplicating any existing file and adjusting the variables.
-
-Themes can be switched at runtime from the Settings panel without reloading the page.
+AMIKO ships more themes, ranging from dark terminals to light palettes. Each theme is a standalone CSS file in `static/css/themes/` that overrides a set of CSS custom properties (colors, borders, glows). You can create a new theme by duplicating any existing file and adjusting the variables.
 
 ### Custom Modules
 
@@ -108,12 +111,12 @@ See [MODULE_GUIDELINES.md](MODULE_GUIDELINES.md) for the complete development gu
 
 ## Status
 
-AMIKO is in early development (v0.1). The core architecture is functional, but the API surface and module contracts may change as the project evolves.
+AMIKO is in early development (v0.2). The core architecture is functional, but the API surface and module contracts may change as the project evolves.
 
 ## Roadmap to v1.0
 
 ### Core
-- [ ] Refactor `app.py` into dedicated modules (routes, handlers, config)
+- [x] Refactor `app.py` into dedicated modules (routes, handlers, config)
 - [ ] Move SSH credentials from URL query parameters to request body
 - [ ] Standardize error handling across all modules
 - [ ] Migrate inline styles from `index.html` to CSS
@@ -135,7 +138,3 @@ AMIKO is in early development (v0.1). The core architecture is functional, but t
 
 This project is licensed under the [GNU General Public License v3.0](LICENSE).
 You are free to use, modify, and redistribute this software under the terms of the GPL v3.
-
----
-
-*AMIKO — one interface, every operation.*

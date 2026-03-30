@@ -1,5 +1,5 @@
-flask
-flask-socketio
+Flask
+Flask-SocketIO
 gevent
+gevent-websocket
 paramiko
-eventlet
