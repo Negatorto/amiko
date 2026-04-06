@@ -157,13 +157,16 @@ def ssh_stats():
     """
     Monitor 1: Stream system stats via SSE
     """
-    hostname = request.args.get('hostname')
-    port = int(request.args.get('port', 22))
-    username = request.args.get('username')
-    password = request.args.get('password')
+    session_id = request.args.get('session_id')
 
-    if not all([hostname, username, password]):
-        return "Missing arguments", 400
+    if not session_id or session_id not in ssh_sessions:
+        return "Missing or invalid session", 400
+        
+    session_data = ssh_sessions[session_id]
+    hostname = session_data['hostname']
+    port = session_data['port']
+    username = session_data['username']
+    password = session_data['password']
 
     def generate():
         ssh = None

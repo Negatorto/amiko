@@ -1,5 +1,6 @@
 from flask import Blueprint, request, Response, stream_with_context
 import json
+from core.config import ssh_sessions
 from utils.sftp_helper import connect_ftp, connect_sftp, search_large_files, search_large_files_ftp
 
 blueprint = Blueprint('large_files', __name__)
@@ -10,15 +11,21 @@ def search_large_files_endpoint():
     Search for large files via SFTP/FTP
     SSE endpoint
     """
-    hostname = request.args.get('hostname')
-    port = int(request.args.get('port', 22))
-    username = request.args.get('username')
-    password = request.args.get('password')
+    session_id = request.args.get('session_id')
     path = request.args.get('path')
     threshold_mb = float(request.args.get('threshold_mb', 50))
 
-    if not all([hostname, port, username, password, path]):
+    if not all([session_id, path]):
         return "Missing arguments", 400
+
+    if session_id not in ssh_sessions:
+        return "Invalid session", 400
+
+    session_data = ssh_sessions[session_id]
+    hostname = session_data['hostname']
+    port = session_data['port']
+    username = session_data['username']
+    password = session_data['password']
 
     def generate():
         client = None

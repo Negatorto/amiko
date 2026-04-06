@@ -1,5 +1,6 @@
 from flask import Blueprint, request, Response, stream_with_context
 import json
+from core.config import ssh_sessions
 from utils.sftp_helper import connect_ftp, connect_sftp, search_keyword_in_files, search_keyword_in_files_ftp
 
 blueprint = Blueprint('keyword_search', __name__)
@@ -10,16 +11,22 @@ def search():
     Keyword search in files via SFTP/FTP
     SSE endpoint
     """
-    hostname = request.args.get('hostname')
-    port = int(request.args.get('port', 22))
-    username = request.args.get('username')
-    password = request.args.get('password')
+    session_id = request.args.get('session_id')
     path = request.args.get('path')
     keyword = request.args.get('keyword')
     case_sensitive = request.args.get('case_sensitive') == 'true'
 
-    if not all([hostname, port, username, password, path, keyword]):
+    if not all([session_id, path, keyword]):
         return "Missing arguments", 400
+
+    if session_id not in ssh_sessions:
+        return "Invalid session", 400
+
+    session_data = ssh_sessions[session_id]
+    hostname = session_data['hostname']
+    port = session_data['port']
+    username = session_data['username']
+    password = session_data['password']
 
     def generate():
         client = None

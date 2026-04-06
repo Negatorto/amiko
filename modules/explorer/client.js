@@ -93,22 +93,21 @@ class ExplorerModule {
         }
     }
 
-    buildQueryParams(extraParams) {
+    buildPayload(extraParams) {
         if (!window.globalConnection || !window.globalConnection.connected) {
             return null;
         }
-        const params = new URLSearchParams();
-        params.append('hostname', window.globalConnection.hostname);
-        params.append('port', window.globalConnection.port);
-        params.append('username', window.globalConnection.username);
-        params.append('password', window.globalConnection.password);
+        const payload = {
+            hostname: window.globalConnection.hostname,
+            port: window.globalConnection.port,
+            username: window.globalConnection.username,
+            password: window.globalConnection.password
+        };
 
         if (extraParams) {
-            for (const [key, value] of Object.entries(extraParams)) {
-                params.append(key, value);
-            }
+            Object.assign(payload, extraParams);
         }
-        return params;
+        return payload;
     }
 
     // ──────────────────────────────────────
@@ -126,11 +125,15 @@ class ExplorerModule {
 
         this.showLoading('⏳ Loading directory...');
 
-        const params = this.buildQueryParams({ path: path });
-        if (!params) return;
+        const payload = this.buildPayload({ path: path });
+        if (!payload) return;
 
         try {
-            const response = await fetch('/explorer/list-dir?' + params.toString());
+            const response = await fetch('/explorer/list-dir', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
             const data = await response.json();
 
             if (data.status === 'ok') {
@@ -157,11 +160,15 @@ class ExplorerModule {
 
         this.showLoading('⏳ Reading file...');
 
-        const params = this.buildQueryParams({ path: path });
-        if (!params) return;
+        const payload = this.buildPayload({ path: path });
+        if (!payload) return;
 
         try {
-            const response = await fetch('/explorer/read-file?' + params.toString());
+            const response = await fetch('/explorer/read-file', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
             const data = await response.json();
 
             if (data.status === 'ok') {
@@ -369,21 +376,14 @@ class ExplorerModule {
 
         const content = this.editorTextarea.value;
 
-        const params = this.buildQueryParams({});
-        if (!params) return;
+        const payload = this.buildPayload({ path: this.currentFilePath, content: content });
+        if (!payload) return;
 
         try {
             const response = await fetch('/explorer/save-file', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    hostname: window.globalConnection.hostname,
-                    port: window.globalConnection.port,
-                    username: window.globalConnection.username,
-                    password: window.globalConnection.password,
-                    path: this.currentFilePath,
-                    content: content
-                })
+                body: JSON.stringify(payload)
             });
 
             const data = await response.json();
@@ -423,11 +423,15 @@ class ExplorerModule {
         if (!window.globalConnection || !window.globalConnection.connected) return;
 
         this.showLoading('⏳ Loading image...');
-        const params = this.buildQueryParams({ path: path });
-        if (!params) return;
+        const payload = this.buildPayload({ path: path });
+        if (!payload) return;
 
         try {
-            const response = await fetch('/explorer/read-image?' + params.toString());
+            const response = await fetch('/explorer/read-image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
             const data = await response.json();
 
             if (data.status === 'ok') {

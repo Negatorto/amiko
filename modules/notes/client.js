@@ -85,7 +85,11 @@ class NotesModule {
         this.setStatus('loading');
 
         try {
-            const response = await fetch(`/notes/load?hostname=${encodeURIComponent(this.currentHostname)}`);
+            const response = await fetch('/notes/load', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ hostname: this.currentHostname })
+            });
             const data = await response.json();
 
             if (this.textarea) {

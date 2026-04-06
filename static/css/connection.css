@@ -194,3 +194,12 @@
         gap: 10px;
     }
 }
+
+/* Injected from index.html inline styles */
+#saved_servers {
+    width: 120px;
+}
+
+#global_port {
+    width: 70px;
+}

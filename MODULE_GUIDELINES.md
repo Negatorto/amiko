@@ -23,7 +23,7 @@ Inside this folder, create a `module.json` file. This tells AMIKO how to populat
 ```json
 {
     "name": "My New Module",
-    "icon": "🚀",
+    "icon": "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2L2 22h20L12 2z'/></svg>",
     "enabled": true,
     "index": 50,
     "description": "A short sentence explaining exactly what the module does.",
@@ -38,7 +38,7 @@ Inside this folder, create a `module.json` file. This tells AMIKO how to populat
 | Field | Required | Description |
 |-------|----------|-------------|
 | `name` | Yes | Display name shown in the sidebar. |
-| `icon` | Yes | Emoji or inline SVG rendered next to the name. |
+| `icon` | Yes | Emoji or SVG string. If SVG is provided, AMIKO converts it into a highly-performant sprite symbol (`#icon-[module_id]`) you can inject elsewhere. |
 | `enabled` | Yes | Set to `false` to hide the module from the sidebar without deleting it. |
 | `index` | Yes | Controls the display order in the sidebar. Lower values appear first (e.g., SSH Terminal uses `0`, Explorer uses `15`). |
 | `description` | No | Short description for internal reference. |
@@ -62,7 +62,10 @@ Because the user can drag multiple instances of "My New Module" into the grid, u
     
     <!-- Module Header -->
     <div class="module-header">
-        <span class="module-title">🚀 My Module</span>
+        <!-- Use the generated SVG Sprite symbol based on your module's folder name -->
+        <span class="module-title">
+            <svg class="module-icon-svg"><use href="#icon-my_module"></use></svg> My Module
+        </span>
         <div class="module-actions">
             <button class="btn-expand" title="Expand/Collapse">⤢</button>
             <button class="btn-close" title="Close Module">❌</button>

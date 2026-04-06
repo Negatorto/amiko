@@ -438,3 +438,15 @@ footer .heart {
 .winbox.wb-amiko-warning .wb-min, .winbox.wb-amiko-warning .wb-max, .winbox.wb-amiko-warning .wb-full {
     display: none !important;
 }
+
+/* Injected from index.html inline styles */
+.amiko-grid-wrapper {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+}
+
+.grid-stack {
+    flex: 1;
+}

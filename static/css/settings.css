@@ -666,3 +666,107 @@
     margin-left: 8px;
     font-weight: bold;
 }
+
+/* Injected from index.html inline styles */
+.settings-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.settings-section-title.no-margin {
+    margin: 0;
+}
+
+.settings-mt-30 {
+    margin-top: 30px;
+}
+
+.settings-field-group {
+    margin-bottom: 20px;
+}
+
+.settings-lock-label {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.settings-hint {
+    font-size: 0.8em;
+    color: var(--text-dim);
+    margin-top: 5px;
+}
+
+.settings-layouts-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.settings-select-field {
+    width: 100%;
+    max-width: 300px;
+    padding: 8px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-medium);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+}
+
+.settings-select-flex {
+    flex: 1;
+}
+
+.btn-action-danger {
+    background: rgba(255, 60, 60, 0.1);
+    color: #ff6b6b;
+    border: 1px solid rgba(255, 60, 60, 0.3);
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.9em;
+}
+
+.btn-action-danger:hover {
+    background: rgba(255, 60, 60, 0.2);
+}
+
+.btn-action-danger.large {
+    padding: 8px 15px;
+    font-size: var(--font-size-base);
+}
+
+.btn-action-primary {
+    background: rgba(41, 128, 185, 0.15);
+    color: #3498db;
+    border: 1px solid rgba(41, 128, 185, 0.4);
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-action-primary:hover {
+    background: rgba(41, 128, 185, 0.25);
+}
+
+.btn-action-success {
+    background: rgba(0, 180, 80, 0.15);
+    color: #4cff88;
+    border: 1px solid rgba(0, 180, 80, 0.4);
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-action-success:hover {
+    background: rgba(0, 180, 80, 0.25);
+}

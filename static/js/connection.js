@@ -143,10 +143,7 @@ function startStatsMonitoring() {
     }
 
     const params = new URLSearchParams({
-        hostname: window.globalConnection.hostname,
-        port: window.globalConnection.port,
-        username: window.globalConnection.username,
-        password: window.globalConnection.password
+        session_id: window.globalConnection.sessionId
     });
 
     window.globalConnection.statsStream = new EventSource('/ssh-stats?' + params.toString());

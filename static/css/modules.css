@@ -65,6 +65,17 @@
     justify-content: center;
 }
 
+.module-icon-svg {
+    width: 1.25em;
+    height: 1.25em;
+    vertical-align: text-bottom;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
 .module-name {
     /* Color inherited from parent to allow hover changes */
     font-weight: bold;
@@ -126,6 +137,14 @@
 .amiko-module .module-title {
     color: var(--text-primary);
     font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.amiko-module .module-title .module-icon-svg {
+    width: 1.45em;
+    height: 1.45em;
 }
 
 .amiko-module .module-actions button {

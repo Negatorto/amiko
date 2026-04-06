@@ -117,10 +117,10 @@ AMIKO is in early development (v0.2). The core architecture is functional, but t
 
 ### Core
 - [x] Refactor `app.py` into dedicated modules (routes, handlers, config)
-- [ ] Move SSH credentials from URL query parameters to request body
+- [x] Move SSH credentials from URL query parameters to request body
 - [ ] Standardize error handling across all modules
-- [ ] Migrate inline styles from `index.html` to CSS
-- [ ] Standardize all icons to SVG format
+- [x] Migrate inline styles from `index.html` to CSS
+- [x] Standardize all modules icons to SVG format
 - [ ] Add favicon
 
 ### Security

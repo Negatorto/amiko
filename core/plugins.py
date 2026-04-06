@@ -1,6 +1,7 @@
 import os
 import json
 import importlib.util
+import re
 from markupsafe import Markup
 
 from core.config import MODULES_DIR
@@ -30,7 +31,19 @@ def load_modules(app):
                 
             # Check if icon is an SVG and mark it safe for HTML rendering
             if 'icon' in mod_data and mod_data['icon'].startswith('<svg'):
-                mod_data['icon'] = Markup(mod_data['icon'])
+                svg_str = mod_data['icon']
+                
+                # Extract viewBox and inner SVG
+                match_vb = re.search(r'viewBox=[\'"]([^\'"]+)[\'"]', svg_str)
+                viewbox = match_vb.group(1) if match_vb else "0 0 24 24"
+                
+                match_inner = re.search(r'<svg[^>]*>(.*?)</svg>', svg_str, re.IGNORECASE | re.DOTALL)
+                inner_html = match_inner.group(1) if match_inner else ""
+                
+                mod_data['symbol'] = Markup(f'<symbol id="icon-{mod_name}" viewBox="{viewbox}">{inner_html}</symbol>')
+                mod_data['icon'] = Markup(svg_str)
+            else:
+                mod_data['symbol'] = ""
 
             template_html = ""
             tpl_path = os.path.join(mod_path, 'template.html')

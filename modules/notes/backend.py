@@ -26,9 +26,10 @@ def _save_notes(data):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-@blueprint.route('/notes/load')
+@blueprint.route('/notes/load', methods=['POST'])
 def load_note():
-    hostname = request.args.get('hostname', '').strip()
+    data = request.get_json() or {}
+    hostname = data.get('hostname', '').strip()
     if not hostname:
         return jsonify({'error': 'hostname is required'}), 400
 

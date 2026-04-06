@@ -16,14 +16,15 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB limit for file reading
 
 def _get_connection_params():
     """Extract and validate connection parameters from request."""
-    hostname = request.args.get('hostname')
-    port = int(request.args.get('port', 22))
-    username = request.args.get('username')
-    password = request.args.get('password')
+    data = request.get_json() or {}
+    hostname = data.get('hostname')
+    port = int(data.get('port', 22))
+    username = data.get('username')
+    password = data.get('password')
 
     if not all([hostname, username, password]):
         return None
-    return hostname, port, username, password
+    return hostname, port, username, password, data
 
 
 def _format_size(size_bytes):
@@ -37,15 +38,15 @@ def _format_size(size_bytes):
     return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
 
 
-@blueprint.route('/explorer/list-dir')
+@blueprint.route('/explorer/list-dir', methods=['POST'])
 def list_dir():
     """List the contents of a remote directory."""
     params = _get_connection_params()
     if not params:
         return jsonify({"status": "error", "message": "Missing connection parameters."}), 400
 
-    hostname, port, username, password = params
-    path = request.args.get('path', '/')
+    hostname, port, username, password, data = params
+    path = data.get('path', '/')
 
     # Normalize path
     if not path or path.strip() == '':
@@ -171,15 +172,15 @@ def list_dir():
                 client.close()
 
 
-@blueprint.route('/explorer/read-file')
+@blueprint.route('/explorer/read-file', methods=['POST'])
 def read_file():
     """Read the text content of a remote file."""
     params = _get_connection_params()
     if not params:
         return jsonify({"status": "error", "message": "Missing connection parameters."}), 400
 
-    hostname, port, username, password = params
-    path = request.args.get('path', '')
+    hostname, port, username, password, data = params
+    path = data.get('path', '')
 
     if not path:
         return jsonify({"status": "error", "message": "No file path specified."}), 400
@@ -345,7 +346,7 @@ def save_file():
                 client.close()
 
 
-@blueprint.route('/explorer/read-image')
+@blueprint.route('/explorer/read-image', methods=['POST'])
 def read_image():
     """Read an image file and return it as base64."""
     import base64
@@ -353,8 +354,8 @@ def read_image():
     if not params:
         return jsonify({"status": "error", "message": "Missing connection parameters."}), 400
 
-    hostname, port, username, password = params
-    path = request.args.get('path', '')
+    hostname, port, username, password, data = params
+    path = data.get('path', '')
 
     if not path:
         return jsonify({"status": "error", "message": "No file path specified."}), 400

@@ -48,10 +48,7 @@ class FilesModule {
         this.largeFilesCount = 0;
 
         const params = new URLSearchParams();
-        params.append('hostname', window.globalConnection.hostname);
-        params.append('port', window.globalConnection.port);
-        params.append('username', window.globalConnection.username);
-        params.append('password', window.globalConnection.password);
+        params.append('session_id', window.globalConnection.sessionId);
 
         params.append('path', this.pathInput.value);
         params.append('threshold_mb', this.thresholdInput.value);

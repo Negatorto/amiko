@@ -24,6 +24,14 @@
 </head>
 
 <body>
+    <!-- SVG Icon Library -->
+    <svg width="0" height="0" style="display: none;">
+        <defs>
+            {% for mod in modules %}
+                {{ mod.symbol | safe }}
+            {% endfor %}
+        </defs>
+    </svg>
     <!-- Header -->
     <header>
         <div class="header-content">
@@ -35,8 +43,7 @@
                 </div>
             </div>
 
-            <button class="btn-settings" id="btnSettings" title="Impostazioni"
-                style="display: flex; align-items: center; gap: 8px;">
+            <button class="btn-settings" id="btnSettings" title="Impostazioni">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="3"></circle>
@@ -56,7 +63,7 @@
                     <div class="global-login-fields">
                         <div class="form-field-inline">
                             <label for="saved_servers">SAVED SERVERS</label>
-                            <select id="saved_servers" style="width: 120px;">
+                            <select id="saved_servers">
                                 <option value="">-- Select --</option>
                                 <option value="new">+ New Server</option>
                             </select>
@@ -67,7 +74,7 @@
                         </div>
                         <div class="form-field-inline">
                             <label for="global_port">PORT</label>
-                            <input type="number" id="global_port" value="22" required style="width: 70px;">
+                            <input type="number" id="global_port" value="22" required>
                         </div>
                         <div class="form-field-inline">
                             <label for="global_username">USER</label>
@@ -131,14 +138,20 @@
             <!-- Dynamic Plugins -->
             {% for mod in modules %}
             <div class="module-item" draggable="true" data-module-type="{{ mod.id }}">
-                <span class="module-icon">{{ mod.icon | safe | default('🧩') }}</span>
+                <span class="module-icon">
+                    {% if mod.symbol %}
+                        <svg class="module-icon-svg"><use href="#icon-{{ mod.id }}"></use></svg>
+                    {% else %}
+                        {{ mod.icon | safe | default('🧩') }}
+                    {% endif %}
+                </span>
                 <span class="module-name">{{ mod.name }}</span>
             </div>
             {% endfor %}
         </aside>
 
         <!-- Grid Area Wrapper -->
-        <div class="amiko-grid-wrapper" style="flex: 1; position: relative; overflow: hidden; display: flex;">
+        <div class="amiko-grid-wrapper">
             <!-- Empty State Message -->
             <div id="emptyGridMessage" class="empty-grid-message">
                 <div class="retro-text">
@@ -148,7 +161,7 @@
             </div>
 
             <!-- GridStack Container -->
-            <div class="grid-stack" id="amikoGrid" style="flex: 1;"></div>
+            <div class="grid-stack" id="amikoGrid"></div>
         </div>
     </main>
 
@@ -163,7 +176,7 @@
     <div class="settings-overlay" id="settingsOverlay">
         <div class="settings-panel">
             <div class="settings-header">
-                <h2 style="display: flex; align-items: center; gap: 10px;">
+                <h2>
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="3"></circle>
@@ -213,8 +226,7 @@
                         <h3 class="settings-section-title">Server Management</h3>
                         <div class="server-table-wrapper"></div>
                         <div class="add-server-row">
-                            <form class="add-server-form"
-                                style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+                            <form class="add-server-form">
                                 <div class="form-field">
                                     <label>Group</label>
                                     <select class="field-group"></select>
@@ -258,49 +270,36 @@
 
                     <!-- Workspace Section -->
                     <div class="settings-section" data-section="workspace">
-                        <div
-                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                            <h3 class="settings-section-title" style="margin: 0;">Workspace Configuration</h3>
-                            <button id="btnClearGrid" type="button"
-                                style="background: rgba(255, 60, 60, 0.1); color: #ff6b6b; border: 1px solid rgba(255, 60, 60, 0.3); padding: 6px 12px; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 0.9em;">🗑️
-                                Clear Grid</button>
+                        <div class="settings-section-header">
+                            <h3 class="settings-section-title no-margin">Workspace Configuration</h3>
+                            <button id="btnClearGrid" type="button" class="btn-action-danger">🗑️ Clear Grid</button>
                         </div>
 
-                        <div class="form-field" style="margin-bottom: 20px;">
+                        <div class="form-field settings-field-group">
                             <label>Startup Behavior</label>
-                            <select id="startupBehaviorSelector"
-                                style="width: 100%; max-width: 300px; padding: 8px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-medium); border-radius: 4px; font-family: monospace;">
+                            <select id="startupBehaviorSelector" class="settings-select-field">
                                 <option value="empty">Start with an Empty Dashboard</option>
                                 <option value="last">Load Last Active Layout</option>
                             </select>
                         </div>
 
-                        <div class="form-field" style="margin-bottom: 20px;">
-                            <label class="crt-toggle-label"
-                                style="cursor: pointer; display: flex; align-items: center; gap: 10px;">
+                        <div class="form-field settings-field-group">
+                            <label class="crt-toggle-label settings-lock-label">
                                 <span class="crt-toggle-title">🔒 LOCK WORKSPACE</span>
                                 <input type="checkbox" class="theme-toggle-checkbox" id="lockWorkspaceToggle">
                             </label>
-                            <p style="font-size: 0.8em; color: var(--text-dim); margin-top: 5px;">Prevents accidental
+                            <p class="settings-hint">Prevents accidental
                                 moving or resizing of grid modules.</p>
                         </div>
 
-                        <h3 class="settings-section-title" style="margin-top: 30px;">Saved Layouts</h3>
-                        <div
-                            style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
-                            <select id="layoutSelector"
-                                style="flex: 1; max-width: 300px; padding: 8px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-medium); border-radius: 4px; font-family: monospace;">
+                        <h3 class="settings-section-title settings-mt-30">Saved Layouts</h3>
+                        <div class="settings-layouts-actions">
+                            <select id="layoutSelector" class="settings-select-field settings-select-flex">
                                 <option value="" disabled selected>-- Select Layout --</option>
                             </select>
-                            <button id="btnLoadLayout" type="button"
-                                style="background: rgba(41, 128, 185, 0.15); color: #3498db; border: 1px solid rgba(41, 128, 185, 0.4); padding: 8px 15px; border-radius: 4px; cursor: pointer; transition: all 0.2s;">📂
-                                Load Selected</button>
-                            <button id="btnSaveLayout" type="button"
-                                style="background: rgba(0, 180, 80, 0.15); color: #4cff88; border: 1px solid rgba(0, 180, 80, 0.4); padding: 8px 15px; border-radius: 4px; cursor: pointer; transition: all 0.2s;">💾
-                                Save Current</button>
-                            <button id="btnDeleteLayout" type="button"
-                                style="background: rgba(255, 60, 60, 0.1); color: #ff6b6b; border: 1px solid rgba(255, 60, 60, 0.3); padding: 8px 15px; border-radius: 4px; cursor: pointer; transition: all 0.2s;">🗑️
-                                Delete Layout</button>
+                            <button id="btnLoadLayout" type="button" class="btn-action-primary">📂 Load Selected</button>
+                            <button id="btnSaveLayout" type="button" class="btn-action-success">💾 Save Current</button>
+                            <button id="btnDeleteLayout" type="button" class="btn-action-danger large">🗑️ Delete Layout</button>
                         </div>
                     </div>
                 </div>
@@ -310,7 +309,7 @@
 
     <!-- Footer -->
     <footer>
-        AMIKO v0.1 - Made with <span class="heart">❤️</span>
+        AMIKO v0.3 - Made with <span class="heart">❤️</span>
     </footer>
 
     <!-- Library Scripts -->
