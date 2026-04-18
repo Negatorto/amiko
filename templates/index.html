@@ -21,6 +21,9 @@
     <link href="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack.min.css" rel="stylesheet" />
     <!-- WinBox.js CSS -->
     <link href="https://cdn.jsdelivr.net/npm/winbox@0.2.82/dist/css/winbox.min.css" rel="stylesheet" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
 </head>
 
 <body>
@@ -36,7 +39,7 @@
     <header>
         <div class="header-content">
             <div class="logo-container">
-                <img src="{{ url_for('static', filename='img/AMIKO.png') }}" alt="AMIKO Logo" class="logo-img">
+                <img src="{{ url_for('static', filename='img/AMIKO.svg') }}" alt="AMIKO Logo" class="logo-img">
                 <div>
                     <h1 class="app-title">AMIKO</h1>
                     <p class="app-subtitle">Advanced Multi-function Interface Kit for Operations</p>

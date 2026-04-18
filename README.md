@@ -29,37 +29,43 @@ Built with Flask and WebSocket, it connects to remote servers via SSH/SFTP and p
 | **Large Files** | Identify and list the largest files on a remote filesystem. |
 | **Notes App** | Per-server scratchpad for saving quick notes and annotations. |
 
-## Requirements
+## Installation & Setup
 
+### 1. Prerequisites
 - Python 3.10+
-- pip
+- git
 
-### Python Dependencies
-
-```
-flask
-flask-socketio
-gevent
-paramiko
-eventlet
-```
-
-Install with:
-
-```bash
-pip install -r requirements.txt
-```
-
-## Quick Start
-
+### 2. Get the code
 ```bash
 git clone https://github.com/Negatorto/amiko.git
 cd amiko
-pip install -r requirements.txt
-python3 app.py
 ```
 
-The server starts at `http://localhost:5423`.
+### 3. Create a Virtual Environment (Recommended)
+Using a virtual environment ensures that the project dependencies are isolated from your system.
+
+**On Linux / macOS:**
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+**On Windows:**
+```powershell
+python -m venv venv
+.\venv\Scripts\activate
+```
+
+### 4. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 5. Run AMIKO
+```bash
+python3 app.py
+```
+The server will start at `http://localhost:5423`.
 
 ## Project Structure
 
@@ -111,9 +117,9 @@ See [MODULE_GUIDELINES.md](MODULE_GUIDELINES.md) for the complete development gu
 
 ## Status
 
-AMIKO is in early development (v0.2). The core architecture is functional, but the API surface and module contracts may change as the project evolves.
+AMIKO is in early development (v0.3). The core architecture is functional, but the API surface and module contracts may change as the project evolves.
 
-## Roadmap to v1.0
+## Roadmap to v1.0.0
 
 ### Core
 - [x] Refactor `app.py` into dedicated modules (routes, handlers, config)

@@ -1,5 +1,6 @@
-Flask
-Flask-SocketIO
-gevent
-gevent-websocket
-paramiko
+Flask==3.1.2
+Flask-SocketIO==5.6.1
+gevent==25.9.1
+gevent-websocket==0.10.1
+paramiko==4.0.0
+python-dotenv==1.2.2

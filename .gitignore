@@ -1,27 +1,10 @@
-# Python
+# Python cache
 __pycache__/
-*.py[cod]
-*.pyo
-*.egg-info/
-dist/
-build/
-*.egg
 
-# Virtual environment
+# Virtual Environment
 venv/
 .venv/
 env/
 
-# AMIKO personal data
+# Local data
 data/
-
-# IDE / Editor
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
