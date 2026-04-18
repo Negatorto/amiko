@@ -124,21 +124,17 @@ AMIKO is in early development (v0.3). The core architecture is functional, but t
 ### Core
 - [x] Refactor `app.py` into dedicated modules (routes, handlers, config)
 - [x] Move SSH credentials from URL query parameters to request body
-- [ ] Standardize error handling across all modules
 - [x] Migrate inline styles from `index.html` to CSS
 - [x] Standardize all modules icons to SVG format
-- [ ] Add favicon
+- [x] Add favicon
 
 ### Security
 - [ ] Login screen with user authentication
-- [ ] Role-based access control (admin, operator, viewer)
+- [ ] Role-based access control (admin, operator)
 
 ### UI/UX
 - [ ] Settings panel improvements (export/import config, server management)
 - [ ] Enhanced text editor in Explorer (syntax highlighting, line numbers, search)
-
-### New Modules
-- [ ] Service Manager — manage systemd services and Docker containers on remote servers
 
 ## License
 
