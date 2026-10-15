@@ -1,8 +1,13 @@
 /*
- * AMIKO - Modular Drag & Drop System (ES6 Object-Oriented)
- * Powered by GridStack.js
+ * AMIKO - Desktop Module Launcher
+ * Desktop Mode: click sidebar dock icon → open module in WinBox
+ * Preserves AmikoModuleRegistry (used by all module client.js)
+ * Preserves GridStackManager for Settings layout compat
  */
 
+/* ══════════════════════════════════════════════════════
+   MODULE REGISTRY (unchanged — required by all modules)
+══════════════════════════════════════════════════════ */
 class AmikoModuleRegistry {
     constructor() {
         this.registry = {};
@@ -29,9 +34,244 @@ class AmikoModuleRegistry {
 
 window.AmikoModules = new AmikoModuleRegistry();
 
-class GridStackManager {
+
+/* ══════════════════════════════════════════════════════
+   WINBOX DESKTOP LAUNCHER
+══════════════════════════════════════════════════════ */
+class AmikoDesktopLauncher {
     constructor() {
-        this.grid = null;
+        // Track open windows: type → WinBox instance
+        this.openWindows = {};
+
+        // GridStack stub (kept so Settings workspace tab doesn't crash)
+        this._initGridStackStub();
+
+        this._initDockButtons();
+        this._initConnectionToggle();
+        this._initClock();
+        this._initBottomBarStatus();
+        this._initLayoutUI();       // Settings workspace buttons
+        this._initStartupBehavior();
+    }
+
+    /* ── GridStack stub (prevents errors from settings.js / drag-drop refs) */
+    _initGridStackStub() {
+        // Minimal stub so settings layout code doesn't crash
+        if (window.GridStack) {
+            try {
+                // Init hidden grid to keep GridStack APIs alive
+                this.grid = GridStack.init({
+                    column: 12,
+                    cellHeight: '130px',
+                    margin: 10,
+                    acceptWidgets: false,
+                    removable: false,
+                    float: false,
+                }, '#amikoGrid');
+            } catch(e) {
+                console.warn('[Launcher] GridStack stub init failed:', e);
+                this.grid = null;
+            }
+        } else {
+            this.grid = null;
+        }
+    }
+
+    /* ── Sidebar Dock Buttons ─────────────────── */
+    _initDockButtons() {
+        const dock = document.getElementById('sidebarDock');
+        if (!dock) return;
+
+        dock.addEventListener('click', (e) => {
+            const btn = e.target.closest('.dock-item');
+            if (!btn) return;
+            const type = btn.getAttribute('data-module-type');
+            if (type) this.openModule(type, btn);
+        });
+    }
+
+    /* ── Open Module in WinBox ────────────────── */
+    openModule(type, dockBtn = null) {
+        // If already open, focus it
+        if (this.openWindows[type] && this.openWindows[type]._winbox) {
+            try {
+                this.openWindows[type]._winbox.focus();
+                return;
+            } catch(e) {
+                // Window was closed externally, continue to reopen
+            }
+        }
+
+        const templateId = `tpl-${type}`;
+        const template = document.getElementById(templateId);
+        if (!template) {
+            console.error(`[Launcher] Template not found: ${templateId}`);
+            return;
+        }
+
+        // Clone module content
+        const clone = template.content.cloneNode(true);
+        const moduleWrapper = clone.querySelector('.amiko-module');
+        if (!moduleWrapper) {
+            console.error(`[Launcher] .amiko-module not found in template: ${templateId}`);
+            return;
+        }
+
+        // Get module title from template header
+        const titleEl = moduleWrapper.querySelector('.module-title');
+        const titleText = titleEl ? titleEl.textContent.trim() : type.toUpperCase();
+
+        // Calculate centered position accounting for sidebar and bars
+        const desktopW = window.innerWidth - 60;     // minus sidebar
+        const desktopH = window.innerHeight - 52 - 36; // minus topbar + bottombar
+        const winW = 700;
+        const winH = 480;
+        const centerX = 60 + Math.max(0, Math.floor((desktopW - winW) / 2));
+        const centerY = 52 + Math.max(0, Math.floor((desktopH - winH) / 2));
+
+        // Tiny cascade so multiple windows don't sit exactly on top of each other
+        const openCount = Object.keys(this.openWindows).length;
+        const cascadeX = centerX + openCount * 20;
+        const cascadeY = centerY + openCount * 20;
+
+        // Create a container div for WinBox to mount
+        const mountEl = document.createElement('div');
+        mountEl.style.cssText = 'width:100%;height:100%;overflow:hidden;';
+        mountEl.appendChild(moduleWrapper);
+
+        // Build WinBox class list from UI prefs (buttons visibility)
+        const wbClasses = ['wb-amiko'];
+        const enabledBtns = new Set((window.amikoUiPrefs?.winbox_buttons) || ['min', 'max', 'full', 'close']);
+        if (!enabledBtns.has('min'))  wbClasses.push('no-min');
+        if (!enabledBtns.has('max'))  wbClasses.push('no-max');
+        if (!enabledBtns.has('full')) wbClasses.push('no-full');
+
+        const wb = new WinBox({
+            title: titleText,
+            class: wbClasses,
+            mount: mountEl,
+            width: 700,
+            height: 480,
+            x: cascadeX,
+            y: cascadeY,
+            top: 52,       // below topbar
+            bottom: 36,    // above bottombar
+            left: 60,      // right of sidebar dock
+            index: 100,
+            onclose: () => {
+                // Destroy module instance
+                if (moduleWrapper._amikoInstance && typeof moduleWrapper._amikoInstance.destroy === 'function') {
+                    try { moduleWrapper._amikoInstance.destroy(); } catch(e) {}
+                }
+                // Remove from tracking
+                delete this.openWindows[type];
+                // Update dock button state
+                if (dockBtn) dockBtn.classList.remove('active');
+                // Update desktop empty state
+                this._updateDesktopEmptyState();
+            }
+        });
+
+
+        // Store reference
+        this.openWindows[type] = { _winbox: wb, wrapper: moduleWrapper };
+
+        // Initialize module instance
+        const instance = window.AmikoModules.createInstance(type, moduleWrapper);
+        moduleWrapper._amikoInstance = instance;
+
+        // Mark dock button as active
+        if (dockBtn) dockBtn.classList.add('active');
+
+        // Update desktop empty state
+        this._updateDesktopEmptyState();
+    }
+
+    /* ── Desktop empty state ──────────────────── */
+    _updateDesktopEmptyState() {
+        const desktop = document.getElementById('amikoDesktop');
+        const msg = document.getElementById('emptyDesktopMessage');
+        if (!desktop || !msg) return;
+
+        const hasWindows = Object.keys(this.openWindows).length > 0;
+        msg.style.opacity = hasWindows ? '0' : '1';
+    }
+
+    /* ── Connection Popover Toggle ────────────── */
+    _initConnectionToggle() {
+        const btn = document.getElementById('connectionToggleBtn');
+        const panel = document.getElementById('connectionPanel');
+        if (!btn || !panel) return;
+
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isHidden = panel.classList.contains('hidden');
+            panel.classList.toggle('hidden', !isHidden);
+            btn.setAttribute('aria-expanded', String(isHidden));
+        });
+
+        // Close on outside click
+        document.addEventListener('click', (e) => {
+            if (!panel.contains(e.target) && e.target !== btn) {
+                panel.classList.add('hidden');
+                btn.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+
+    /* ── Live Clock ───────────────────────────── */
+    _initClock() {
+        const timeEl = document.getElementById('topbar-time');
+        const dateEl = document.getElementById('topbar-date');
+        if (!timeEl || !dateEl) return;
+
+        this._updateClock = () => {
+            const now    = new Date();
+            const use12h = window.amikoUiPrefs?.clock_format === '12h';
+            timeEl.textContent = now.toLocaleTimeString('it-IT', {
+                hour:   '2-digit',
+                minute: '2-digit',
+                hour12: use12h
+            });
+            dateEl.textContent = now.toLocaleDateString('it-IT', {
+                weekday: 'short', day: '2-digit', month: 'short'
+            });
+        };
+
+        this._updateClock();
+        setInterval(() => this._updateClock(), 10000);
+    }
+
+
+    /* ── Bottom Bar Status Sync ───────────────── */
+    _initBottomBarStatus() {
+        const dot = document.getElementById('bottombarDot');
+        const txt = document.getElementById('bottombarStatusText');
+        const topDot = document.getElementById('topbarStatusDot');
+
+        const setConnected = (connected, host) => {
+            if (dot) dot.classList.toggle('connected', connected);
+            if (txt) txt.textContent = connected ? `Connected: ${host}` : 'Disconnected';
+            if (topDot) topDot.classList.toggle('connected', connected);
+        };
+
+        window.addEventListener('amikoGlobalConnect', (e) => {
+            setConnected(true, e.detail?.hostname || '');
+            // Close the popover after successful connect
+            const panel = document.getElementById('connectionPanel');
+            if (panel) panel.classList.add('hidden');
+        });
+
+        window.addEventListener('amikoGlobalDisconnect', () => {
+            setConnected(false, '');
+        });
+    }
+
+    /* ══════════════════════════════════════════════
+       LAYOUT PERSISTENCE (Settings workspace tab)
+       Kept intact so settings.js + existing logic works
+    ══════════════════════════════════════════════ */
+    _initLayoutUI() {
         try {
             this.layouts = JSON.parse(localStorage.getItem('amiko_layouts')) || {};
         } catch(e) {
@@ -39,222 +279,26 @@ class GridStackManager {
         }
         this.currentLayout = localStorage.getItem('amiko_current_layout') || null;
         this.isLoading = false;
-        
-        this.initGrid();
-        this.initSidebarDrag();
-        this.initGlobalEventDelegation();
-        this.initLayoutUI();
-    }
 
-    initSidebarDrag() {
-        // Use native HTML5 drag and drop
-        const draggables = document.querySelectorAll('.module-item');
-        draggables.forEach(draggable => {
-            draggable.addEventListener('dragstart', (e) => {
-                const type = draggable.getAttribute('data-module-type');
-                // Store module type in dataTransfer
-                e.dataTransfer.setData('application/amiko-module', type);
-                e.dataTransfer.effectAllowed = 'copy';
-            });
-        });
+        this.selectorEl       = document.getElementById('layoutSelector');
+        this.btnLoad          = document.getElementById('btnLoadLayout');
+        this.btnSave          = document.getElementById('btnSaveLayout');
+        this.btnClr           = document.getElementById('btnClearGrid');
+        this.btnDelLayout     = document.getElementById('btnDeleteLayout');
+        this.startupSelector  = document.getElementById('startupBehaviorSelector');
+        this.lockToggle       = document.getElementById('lockWorkspaceToggle');
 
-        // Listen for drops on the grid wrapper area
-        const wrapperEl = document.querySelector('.amiko-grid-wrapper');
-        if (wrapperEl) {
-            wrapperEl.addEventListener('dragover', (e) => {
-                e.preventDefault(); // Necessary to allow dropping
-                e.dataTransfer.dropEffect = 'copy';
-            });
-
-            wrapperEl.addEventListener('drop', (e) => {
-                e.preventDefault();
-                const moduleType = e.dataTransfer.getData('application/amiko-module');
-                if (moduleType) {
-                    this.instantiateModuleAndAdd(moduleType, null, e);
-                    this.saveCurrentLayout(); // Auto-save on drop
-                }
-            });
-        }
-    }
-
-    initGrid() {
-        if(!window.GridStack) {
-            console.error("GridStack missing!");
-            return;
-        }
-        
-        this.grid = GridStack.init({
-            column: 12, // GridStack requires 12 columns for default CSS to work
-            cellHeight: '130px',
-            margin: 10,
-            acceptWidgets: false, // We handle it manually
-            removable: false,
-            float: false, // Ensures widgets pack upwards neatly for an organized look
-        }, '#amikoGrid');
-
-        // Watch for changes to update the empty state
-        this.grid.on('added removed', () => {
-            this.updateEmptyState();
-        });
-        
-        // Initial check
-        this.updateEmptyState();
-    }
-
-    updateEmptyState() {
-        const emptyMsg = document.getElementById('emptyGridMessage');
-        if (!emptyMsg || !this.grid) return;
-        
-        const widgets = this.grid.getGridItems();
-        if (widgets && widgets.length > 0) {
-            emptyMsg.style.opacity = '0';
-        } else {
-            emptyMsg.style.opacity = '1';
-        }
-    }
-
-    instantiateModuleAndAdd(type, config = null, dropEvent = null) {
-        const templateId = `tpl-${type}`;
-        const template = document.getElementById(templateId);
-
-        if (!template) {
-            console.error(`[GridStackManager] Template not found for module type: ${type}`);
-            return;
-        }
-
-        let x = 0, y = 0, w = 6, h = 3;
-
-        // Calculate drop position if dropped from sidebar
-        if (dropEvent) {
-            const gridEl = document.querySelector('.grid-stack');
-            const rect = gridEl.getBoundingClientRect();
-            
-            const cellWidth = gridEl.offsetWidth / 12;
-            const cellHeight = 140; 
-            x = Math.floor((dropEvent.clientX - rect.left) / cellWidth);
-            y = Math.floor((dropEvent.clientY - rect.top) / cellHeight);
-
-            // Keep bounds
-            if (x < 0) x = 0;
-            if (x > 6) x = 6;
-            if (y < 0) y = 0;
-        } else if (config) {
-            x = config.x;
-            y = config.y;
-            w = config.w;
-            h = config.h;
-        }
-
-        // Build widget DOM
-        const widgetEl = document.createElement('div');
-        widgetEl.className = 'grid-stack-item';
-        widgetEl.setAttribute('data-module-type', type);
-        
-        if (config && config.isExpanded) widgetEl.setAttribute('data-amiko-expanded', 'true');
-        if (config && config.origW) widgetEl.setAttribute('data-orig-w', config.origW);
-        if (config && config.origH) widgetEl.setAttribute('data-orig-h', config.origH);
-        if (config && config.origX) widgetEl.setAttribute('data-orig-x', config.origX);
-        if (config && config.origY) widgetEl.setAttribute('data-orig-y', config.origY);
-
-        // Inner content container
-        const contentEl = document.createElement('div');
-        contentEl.className = 'grid-stack-item-content';
-        
-        // Clone module template
-        const clone = template.content.cloneNode(true);
-        const moduleWrapper = clone.querySelector('.amiko-module');
-        if (!moduleWrapper) return;
-
-        // Assemble
-        contentEl.appendChild(moduleWrapper);
-        widgetEl.appendChild(contentEl);
-
-        // Add to grid programmatically
-        this.grid.addWidget(widgetEl, { w, h, x, y, autoPosition: !config });
-
-        // Initialize internal module logic
-        const instance = window.AmikoModules.createInstance(type, moduleWrapper);
-        moduleWrapper._amikoInstance = instance;
-    }
-
-    initGlobalEventDelegation() {
-        document.querySelector('.grid-stack').addEventListener('click', (e) => {
-            const btnClose = e.target.closest('.btn-close');
-            const btnExpand = e.target.closest('.btn-expand');
-
-            if (btnClose || btnExpand) {
-                const moduleWrapper = e.target.closest('.amiko-module');
-                const widgetEl = e.target.closest('.grid-stack-item');
-
-                if (!moduleWrapper || !widgetEl) return;
-
-                if (btnClose) {
-                    this.handleCloseModule(moduleWrapper, widgetEl);
-                } else if (btnExpand) {
-                    this.handleExpandModule(widgetEl);
-                }
-            }
-        });
-    }
-
-    handleCloseModule(moduleWrapper, widgetEl) {
-        if (moduleWrapper._amikoInstance && typeof moduleWrapper._amikoInstance.destroy === 'function') {
-            try {
-                moduleWrapper._amikoInstance.destroy();
-            } catch (err) {
-                console.error("Error destroying module:", err);
-            }
-        }
-        
-        this.grid.removeWidget(widgetEl);
-    }
-
-    handleExpandModule(widgetEl) {
-        const isExpanded = widgetEl.getAttribute('data-amiko-expanded') === 'true';
-        
-        if (isExpanded) {
-            const origW = parseInt(widgetEl.getAttribute('data-orig-w')) || 6;
-            const origH = parseInt(widgetEl.getAttribute('data-orig-h')) || 3;
-            const origX = parseInt(widgetEl.getAttribute('data-orig-x')) || 0;
-            const origY = parseInt(widgetEl.getAttribute('data-orig-y')) || 0;
-            this.grid.update(widgetEl, {w: origW, h: origH, x: origX, y: origY});
-            widgetEl.removeAttribute('data-amiko-expanded');
-        } else {
-            const node = widgetEl.gridstackNode;
-            if (node) {
-                widgetEl.setAttribute('data-orig-w', node.w);
-                widgetEl.setAttribute('data-orig-h', node.h);
-                widgetEl.setAttribute('data-orig-x', node.x);
-                widgetEl.setAttribute('data-orig-y', node.y);
-            }
-            this.grid.update(widgetEl, {w: 12, h: 5, x: 0});
-            widgetEl.setAttribute('data-amiko-expanded', 'true');
-        }
-        this.saveCurrentLayout(); // Auto-save layout on modify
-    }
-
-    // ── Layout Persistence Methods ──
-
-    initLayoutUI() {
-        this.selectorEl = document.getElementById('layoutSelector');
-        this.btnLoad = document.getElementById('btnLoadLayout');
-        this.btnSave = document.getElementById('btnSaveLayout');
-        this.btnClr = document.getElementById('btnClearGrid');
-        this.btnDelLayout = document.getElementById('btnDeleteLayout');
-        this.startupSelector = document.getElementById('startupBehaviorSelector');
-        this.lockToggle = document.getElementById('lockWorkspaceToggle');
-
-        this.updateSelectorDropdown();
-        this.updateStartupDropdown();
+        this._updateSelectorDropdown();
+        this._updateStartupDropdown();
 
         if (this.btnLoad) {
             this.btnLoad.addEventListener('click', () => {
-                const layoutName = this.selectorEl.value;
-                if (layoutName) {
-                    this.loadLayout(layoutName);
-                    if (window.AmikoAlert) window.AmikoAlert('Workspace', `Workspace '${layoutName}' loaded successfully.`, 'success');
+                const name = this.selectorEl?.value;
+                if (name) {
+                    this._loadLayout(name);
+                    if (window.AmikoAlert) window.AmikoAlert('Workspace', `Layout '${name}' loaded.`, 'success');
                 } else {
-                    if (window.AmikoAlert) window.AmikoAlert('Workspace', 'Please select a layout to load from the dropdown.', 'warning');
+                    if (window.AmikoAlert) window.AmikoAlert('Workspace', 'Select a layout first.', 'warning');
                 }
             });
         }
@@ -264,29 +308,26 @@ class GridStackManager {
                 const onSave = (name) => {
                     if (name) {
                         this.currentLayout = name;
-                        this.saveCurrentLayout();
-                        this.updateSelectorDropdown();
-                        this.updateStartupDropdown();
-                        if (window.AmikoAlert) window.AmikoAlert('Success', `Layout '${name}' saved successfully.`, 'success');
+                        this._saveCurrentLayout();
+                        this._updateSelectorDropdown();
+                        this._updateStartupDropdown();
+                        if (window.AmikoAlert) window.AmikoAlert('Success', `Layout '${name}' saved.`, 'success');
                     }
                 };
                 if (window.AmikoPrompt) {
-                    window.AmikoPrompt("Save Layout", "Enter a name for this Layout:", "My Dashboard", onSave);
+                    window.AmikoPrompt('Save Layout', 'Enter a name for this layout:', 'My Dashboard', onSave);
                 } else {
-                    const name = prompt("Enter a name for this Layout:", "My Dashboard");
-                    onSave(name);
+                    onSave(prompt('Enter a name:', 'My Dashboard'));
                 }
             });
         }
 
         if (this.btnClr) {
             this.btnClr.addEventListener('click', () => {
-                const doClear = () => {
-                    this.clearGrid();
-                };
+                const doClear = () => this._closeAllWindows();
                 if (window.AmikoConfirm) {
-                    window.AmikoConfirm('Warning', 'Are you sure you want to clear the dashboard?', doClear);
-                } else if(confirm("Are you sure you want to clear the dashboard?")) {
+                    window.AmikoConfirm('Warning', 'Close all open module windows?', doClear);
+                } else if (confirm('Close all open module windows?')) {
                     doClear();
                 }
             });
@@ -294,63 +335,39 @@ class GridStackManager {
 
         if (this.btnDelLayout) {
             this.btnDelLayout.addEventListener('click', () => {
-                const layoutName = this.selectorEl.value;
-                if (!layoutName) {
-                    if (window.AmikoAlert) window.AmikoAlert('Workspace', 'Please select a layout to delete.', 'warning');
-                    else alert('Please select a layout to delete.');
+                const name = this.selectorEl?.value;
+                if (!name) {
+                    if (window.AmikoAlert) window.AmikoAlert('Workspace', 'Select a layout to delete.', 'warning');
                     return;
                 }
                 const doDelete = () => {
-                    delete this.layouts[layoutName];
+                    delete this.layouts[name];
                     localStorage.setItem('amiko_layouts', JSON.stringify(this.layouts));
-                    
-                    if (this.currentLayout === layoutName) {
+                    if (this.currentLayout === name) {
                         this.currentLayout = null;
                         localStorage.removeItem('amiko_current_layout');
                     }
-                    
-                    this.updateSelectorDropdown();
-                    this.updateStartupDropdown();
-                    
-                    if (window.AmikoAlert) window.AmikoAlert('Success', `Layout '${layoutName}' deleted.`, 'success');
+                    this._updateSelectorDropdown();
+                    this._updateStartupDropdown();
+                    if (window.AmikoAlert) window.AmikoAlert('Success', `Layout '${name}' deleted.`, 'success');
                 };
-
                 if (window.AmikoConfirm) {
-                    window.AmikoConfirm('Confirm Delete', `Are you sure you want to delete the layout '${layoutName}'?`, doDelete);
-                } else if (confirm(`Are you sure you want to delete the layout '${layoutName}'?`)) {
+                    window.AmikoConfirm('Confirm Delete', `Delete layout '${name}'?`, doDelete);
+                } else if (confirm(`Delete layout '${name}'?`)) {
                     doDelete();
                 }
             });
         }
 
-        // Initialize Grid Lock
         if (this.lockToggle) {
+            // Lock toggle no longer applies to GridStack, keep UI only
             const isLocked = localStorage.getItem('amiko_grid_locked') === 'true';
             this.lockToggle.checked = isLocked;
-            this.toggleGridLock(isLocked);
             this.lockToggle.addEventListener('change', (e) => {
-                this.toggleGridLock(e.target.checked);
+                localStorage.setItem('amiko_grid_locked', e.target.checked ? 'true' : 'false');
             });
         }
 
-        // Auto-save on change
-        this.grid.on('change', () => {
-            if (!this.isLoading) this.saveCurrentLayout();
-        });
-
-        // Handle Startup Behavior
-        setTimeout(() => {
-            const startupBehavior = localStorage.getItem('amiko_startup_behavior') || 'empty';
-            if (startupBehavior === 'empty') {
-                this.clearGrid();
-            } else if (startupBehavior === 'last' && this.currentLayout) {
-                this.loadLayout(this.currentLayout);
-            } else if (this.layouts[startupBehavior]) {
-                this.loadLayout(startupBehavior);
-            }
-        }, 100);
-
-        // Update startup behavior when changed in settings
         if (this.startupSelector) {
             this.startupSelector.addEventListener('change', (e) => {
                 localStorage.setItem('amiko_startup_behavior', e.target.value);
@@ -358,130 +375,100 @@ class GridStackManager {
         }
     }
 
-    toggleGridLock(isLocked) {
-        if (!this.grid) return;
-        this.grid.setStatic(isLocked);
-        localStorage.setItem('amiko_grid_locked', isLocked ? 'true' : 'false');
-        
-        // Disable deleting modules if grid is locked
-        const gridItems = document.querySelectorAll('.grid-stack-item');
-        gridItems.forEach(item => {
-            const closeBtn = item.querySelector('.btn-close');
-            const expandBtn = item.querySelector('.btn-expand');
-            if (closeBtn) closeBtn.style.display = isLocked ? 'none' : 'block';
-            if (expandBtn) expandBtn.style.display = isLocked ? 'none' : 'block';
-        });
-    }
-
-    updateSelectorDropdown() {
-        if (!this.selectorEl) return;
-        this.selectorEl.innerHTML = '<option value="" disabled>-- Select Layout --</option>';
-        for (const layoutName in this.layouts) {
-            const opt = document.createElement('option');
-            opt.value = layoutName;
-            opt.textContent = layoutName;
-            if (layoutName === this.currentLayout) opt.selected = true;
-            this.selectorEl.appendChild(opt);
-        }
-    }
-
-    updateStartupDropdown() {
-        if (!this.startupSelector) return;
-        // Keep the first two fixed options
-        this.startupSelector.innerHTML = `
-            <option value="empty">Start with an Empty Dashboard</option>
-            <option value="last">Load Last Active Layout</option>
-        `;
-        // Append user layouts
-        for (const layoutName in this.layouts) {
-            const opt = document.createElement('option');
-            opt.value = layoutName;
-            opt.textContent = `Load specific layout: ${layoutName}`;
-            this.startupSelector.appendChild(opt);
-        }
-        // Set selected
-        const currentStartup = localStorage.getItem('amiko_startup_behavior') || 'empty';
-        this.startupSelector.value = currentStartup;
-    }
-    saveCurrentLayout() {
-        if (!this.grid || this.isLoading) return;
-        
-        const serialized = this.grid.getGridItems().map(el => {
-            const node = el.gridstackNode;
-            if (!node) return null;
-            return {
-                x: node.x,
-                y: node.y,
-                w: node.w,
-                h: node.h,
-                type: el.getAttribute('data-module-type'),
-                isExpanded: el.getAttribute('data-amiko-expanded') === 'true',
-                origW: el.getAttribute('data-orig-w'),
-                origH: el.getAttribute('data-orig-h'),
-                origX: el.getAttribute('data-orig-x'),
-                origY: el.getAttribute('data-orig-y')
-            };
-        }).filter(Boolean);
-        
-        // Don't auto-save an empty layout if there's no defined name
-        if (!this.currentLayout) {
-            // Generate a default name if it's the first time
-            if (serialized.length > 0) {
-                this.currentLayout = "AutoSave";
-            } else {
-                return; // Nothing to save
+    _initStartupBehavior() {
+        setTimeout(() => {
+            const behavior = localStorage.getItem('amiko_startup_behavior') || 'empty';
+            if (behavior === 'empty') return;
+            if (behavior === 'last' && this.currentLayout && this.layouts[this.currentLayout]) {
+                this._loadLayout(this.currentLayout);
+            } else if (this.layouts[behavior]) {
+                this._loadLayout(behavior);
             }
-        }
-        
-        this.layouts[this.currentLayout] = serialized;
+        }, 200);
+    }
+
+    _closeAllWindows() {
+        // Close all WinBox windows
+        Object.values(this.openWindows).forEach(entry => {
+            try { entry._winbox.close(); } catch(e) {}
+        });
+        this.openWindows = {};
+        this._updateDesktopEmptyState();
+
+        // Reset dock buttons
+        document.querySelectorAll('.dock-item.active').forEach(b => b.classList.remove('active'));
+    }
+
+    _saveCurrentLayout() {
+        if (!this.currentLayout) return;
+        // Save which modules are currently open
+        const layout = Object.keys(this.openWindows).map(type => ({ type }));
+        this.layouts[this.currentLayout] = layout;
         localStorage.setItem('amiko_layouts', JSON.stringify(this.layouts));
         localStorage.setItem('amiko_current_layout', this.currentLayout);
     }
 
-    loadLayout(name) {
+    _loadLayout(name) {
         if (!this.layouts[name]) return;
-        
         this.isLoading = true;
-        
-        // Copy data to prevent referencing issues
-        const layoutData = Array.from(this.layouts[name]);
-
-        // Clear existing grid without triggering an auto-save that would overwrite the newly selected name
-        this.clearGrid(false);
-        
+        this._closeAllWindows();
         this.currentLayout = name;
-        localStorage.setItem('amiko_current_layout', this.currentLayout);
+        localStorage.setItem('amiko_current_layout', name);
 
-        layoutData.forEach(config => {
+        const layout = this.layouts[name];
+        layout.forEach(config => {
             if (config.type) {
-                this.instantiateModuleAndAdd(config.type, config, null);
+                const dockBtn = document.getElementById(`dock-btn-${config.type}`);
+                this.openModule(config.type, dockBtn);
             }
         });
-        
-        // Ensure selector reflects current
-        if (this.selectorEl) this.selectorEl.value = this.currentLayout;
-        
+
+        if (this.selectorEl) this.selectorEl.value = name;
         this.isLoading = false;
-        // Save the freshly rendered grid if needed
-        this.saveCurrentLayout();
     }
 
-    clearGrid(saveAfter = true) {
-        if (!this.grid) return;
-        const widgets = this.grid.getGridItems();
-        widgets.forEach(widget => {
-            const moduleWrapper = widget.querySelector('.amiko-module');
-            this.handleCloseModule(moduleWrapper, widget);
-        });
-        this.updateEmptyState();
-        if (saveAfter) {
-            this.saveCurrentLayout();
+    _updateSelectorDropdown() {
+        if (!this.selectorEl) return;
+        this.selectorEl.innerHTML = '<option value="" disabled>-- Select Layout --</option>';
+        for (const name in this.layouts) {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            if (name === this.currentLayout) opt.selected = true;
+            this.selectorEl.appendChild(opt);
         }
     }
+
+    _updateStartupDropdown() {
+        if (!this.startupSelector) return;
+        this.startupSelector.innerHTML = `
+            <option value="empty">Start with an Empty Dashboard</option>
+            <option value="last">Load Last Active Layout</option>
+        `;
+        for (const name in this.layouts) {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = `Load specific layout: ${name}`;
+            this.startupSelector.appendChild(opt);
+        }
+        const current = localStorage.getItem('amiko_startup_behavior') || 'empty';
+        this.startupSelector.value = current;
+    }
+
+    /* Public alias for old GridStackManager API (settings.js compatibility) */
+    saveCurrentLayout()    { this._saveCurrentLayout(); }
+    loadLayout(name)       { this._loadLayout(name); }
+    clearGrid(save = true) { this._closeAllWindows(); if(save) this._saveCurrentLayout(); }
+    updateEmptyState()     { this._updateDesktopEmptyState(); }
 }
 
+/* ══════════════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
-        window.AmikoDragDrop = new GridStackManager();
+        window.AmikoDragDrop = new AmikoDesktopLauncher();
+        // Alias for old code that references GridStackManager
+        window.AmikoGridStack = window.AmikoDragDrop;
     }, 100);
 });

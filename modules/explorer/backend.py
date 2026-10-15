@@ -1,18 +1,128 @@
 """
 AMIKO - Explorer Module Backend
 Provides directory listing and text file reading via SFTP/FTP.
+
+OPTIMIZATION: SSH Connection Pool
+  Each request no longer opens a new SSH handshake.
+  Connections are cached per (host, port, user) for up to POOL_TTL seconds.
+  A new SFTP channel is opened on the existing transport (cheap).
 """
 
 from flask import Blueprint, request, jsonify
 import stat
 import os
+import time
+import hashlib
+import threading
 from io import BytesIO
 from utils.sftp_helper import connect_sftp, connect_ftp
+from core.config import settings as _amiko_settings
 
 blueprint = Blueprint('explorer', __name__)
 
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB limit for file reading
+# Fallback hard-limit (used only when settings cannot be read)
+_HARD_MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB absolute ceiling
 
+def _get_max_file_size() -> int:
+    """Return the user-configured max file size in bytes (1–20 MB)."""
+    try:
+        mb = int(_amiko_settings.get_ui_prefs().get('explorer_max_file_mb', 10))
+        mb = max(1, min(20, mb))
+    except Exception:
+        mb = 10
+    return mb * 1024 * 1024
+
+def _get_show_hidden() -> bool:
+    """Return True if hidden files (dotfiles) should be listed."""
+    try:
+        return bool(_amiko_settings.get_ui_prefs().get('explorer_show_hidden', False))
+    except Exception:
+        return False
+
+POOL_TTL = 120  # seconds — reuse SSH transport for up to 2 minutes
+
+# ─── SSH Connection Pool ───────────────────────────────────────────────────
+# Structure: { pool_key → { 'ssh': SSHClient, 'last_used': float } }
+_ssh_pool: dict = {}
+_pool_lock = threading.Lock()
+
+
+def _pool_key(hostname: str, port: int, username: str, password: str) -> str:
+    """Stable cache key — hashes the password so it's not stored in plain text."""
+    pw_hash = hashlib.sha256(password.encode()).hexdigest()[:16]
+    return f"{hostname}:{port}:{username}:{pw_hash}"
+
+
+def _get_sftp(hostname: str, port: int, username: str, password: str):
+    """
+    Return (ssh_client, sftp_client, from_pool).
+    Reuses an existing SSH transport when available; otherwise creates a new one.
+    """
+    key = _pool_key(hostname, port, username, password)
+
+    with _pool_lock:
+        entry = _ssh_pool.get(key)
+        if entry:
+            try:
+                transport = entry['ssh'].get_transport()
+                if transport and transport.is_active():
+                    # Reuse transport — open a lightweight new SFTP channel
+                    sftp = entry['ssh'].open_sftp()
+                    entry['last_used'] = time.time()
+                    return entry['ssh'], sftp, True  # from_pool=True
+            except Exception:
+                pass
+            # Dead connection — remove and fall through to reconnect
+            try:
+                entry['ssh'].close()
+            except Exception:
+                pass
+            del _ssh_pool[key]
+
+    # No valid cached connection — create a new one
+    ssh, sftp = connect_sftp(hostname, port, username, password)
+
+    with _pool_lock:
+        _ssh_pool[key] = {'ssh': ssh, 'last_used': time.time()}
+        _cleanup_pool_locked()  # Evict stale entries while we hold the lock
+
+    return ssh, sftp, False  # from_pool=False
+
+
+def _cleanup_pool_locked():
+    """Remove stale entries. Must be called while _pool_lock is held."""
+    now = time.time()
+    dead = [k for k, v in _ssh_pool.items() if now - v['last_used'] > POOL_TTL]
+    for k in dead:
+        try:
+            _ssh_pool[k]['ssh'].close()
+        except Exception:
+            pass
+        del _ssh_pool[k]
+
+
+def _release_sftp(sftp, from_pool: bool):
+    """Close only the SFTP channel — keep the SSH transport alive in the pool."""
+    try:
+        if sftp:
+            sftp.close()
+    except Exception:
+        pass
+
+
+def _invalidate_pool_entry(hostname: str, port: int, username: str, password: str):
+    """Remove a broken connection from the pool."""
+    key = _pool_key(hostname, port, username, password)
+    with _pool_lock:
+        entry = _ssh_pool.pop(key, None)
+        if entry:
+            try:
+                entry['ssh'].close()
+            except Exception:
+                pass
+
+
+# ─── Helpers ──────────────────────────────────────────────────────────────
 
 def _get_connection_params():
     """Extract and validate connection parameters from request."""
@@ -21,7 +131,6 @@ def _get_connection_params():
     port = int(data.get('port', 22))
     username = data.get('username')
     password = data.get('password')
-
     if not all([hostname, username, password]):
         return None
     return hostname, port, username, password, data
@@ -38,6 +147,8 @@ def _format_size(size_bytes):
     return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
 
 
+# ─── Routes ───────────────────────────────────────────────────────────────
+
 @blueprint.route('/explorer/list-dir', methods=['POST'])
 def list_dir():
     """List the contents of a remote directory."""
@@ -46,130 +157,94 @@ def list_dir():
         return jsonify({"status": "error", "message": "Missing connection parameters."}), 400
 
     hostname, port, username, password, data = params
-    path = data.get('path', '/')
+    path = data.get('path', '/') or '/'
+    path = path.strip() or '/'
 
-    # Normalize path
-    if not path or path.strip() == '':
-        path = '/'
-
-    client = None
-    sftp = None
+    ftp_client = None
 
     try:
         entries = []
 
         if port == 21:
-            # FTP mode
-            client = connect_ftp(hostname, port, username, password)
-            current_path = path
-
+            # ── FTP mode (no pool — ftplib connections are not thread-safe / reusable) ──
+            ftp_client = connect_ftp(hostname, port, username, password)
             try:
-                client.cwd(current_path)
+                ftp_client.cwd(path)
             except Exception:
-                return jsonify({
-                    "status": "error",
-                    "message": f"Cannot access directory: {current_path}"
-                }), 400
+                return jsonify({"status": "error", "message": f"Cannot access directory: {path}"}), 400
 
-            # Use MLSD for detailed listing (modern FTP)
             try:
-                for name, facts in client.mlsd(current_path):
+                for name, facts in ftp_client.mlsd(path):
                     if name in ('.', '..'):
                         continue
                     is_dir = facts.get('type', '') == 'dir'
                     size = int(facts.get('size', 0)) if not is_dir else 0
-                    modified = facts.get('modify', '')
                     entries.append({
                         "name": name,
                         "is_dir": is_dir,
                         "size": size,
                         "size_display": _format_size(size) if not is_dir else "—",
-                        "modified": modified
+                        "modified": facts.get('modify', '')
                     })
             except Exception:
-                # Fallback: use NLST if MLSD is not supported
-                names = client.nlst(current_path)
+                # Fallback: NLST (no per-file cwd loop — just mark all as files)
+                names = ftp_client.nlst(path)
                 for full_path_entry in names:
                     name = os.path.basename(full_path_entry)
                     if name in ('.', '..'):
                         continue
-                    # Try to determine if directory
-                    is_dir = False
-                    size = 0
-                    try:
-                        client.cwd(full_path_entry)
-                        is_dir = True
-                        client.cwd(current_path)
-                    except Exception:
-                        try:
-                            size = client.size(full_path_entry) or 0
-                        except Exception:
-                            size = 0
+                    if name.startswith('.') and not _get_show_hidden():
+                        continue
+                    entries.append({
+                        "name": name,
+                        "is_dir": False,
+                        "size": 0,
+                        "size_display": "—",
+                        "modified": ""
+                    })
+        else:
+            # ── SFTP mode — reuse pooled SSH transport ──
+            ssh, sftp, from_pool = _get_sftp(hostname, port, username, password)
+            try:
+                try:
+                    file_list = sftp.listdir_attr(path)
+                except IOError:
+                    return jsonify({"status": "error", "message": f"Cannot access directory: {path}"}), 400
+
+                for attr in file_list:
+                    name = attr.filename
+                    if name in ('.', '..'):
+                        continue
+                    if name.startswith('.') and not _get_show_hidden():
+                        continue
+                    is_dir = stat.S_ISDIR(attr.st_mode) if attr.st_mode else False
+                    size = attr.st_size or 0
                     entries.append({
                         "name": name,
                         "is_dir": is_dir,
                         "size": size,
                         "size_display": _format_size(size) if not is_dir else "—",
-                        "modified": ""
+                        "modified": attr.st_mtime or 0
                     })
-        else:
-            # SFTP mode
-            client, sftp = connect_sftp(hostname, port, username, password)
+            except Exception as e:
+                _invalidate_pool_entry(hostname, port, username, password)
+                raise
+            finally:
+                _release_sftp(sftp, from_pool)
 
-            try:
-                file_list = sftp.listdir_attr(path)
-            except IOError:
-                return jsonify({
-                    "status": "error",
-                    "message": f"Cannot access directory: {path}"
-                }), 400
-
-            for attr in file_list:
-                name = attr.filename
-                if name in ('.', '..'):
-                    continue
-                is_dir = stat.S_ISDIR(attr.st_mode) if attr.st_mode else False
-                size = attr.st_size or 0
-                modified = attr.st_mtime or 0
-
-                entries.append({
-                    "name": name,
-                    "is_dir": is_dir,
-                    "size": size,
-                    "size_display": _format_size(size) if not is_dir else "—",
-                    "modified": modified
-                })
-
-        # Sort: directories first, then alphabetically
         entries.sort(key=lambda e: (not e['is_dir'], e['name'].lower()))
-
-        return jsonify({
-            "status": "ok",
-            "path": path,
-            "entries": entries
-        })
+        return jsonify({"status": "ok", "path": path, "entries": entries})
 
     except ConnectionRefusedError:
-        return jsonify({
-            "status": "error",
-            "message": "Connection refused. Check host and port."
-        }), 500
+        return jsonify({"status": "error", "message": "Connection refused. Check host and port."}), 500
     except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": f"Error: {str(e)}"
-        }), 500
+        return jsonify({"status": "error", "message": f"Error: {str(e)}"}), 500
     finally:
-        if sftp:
-            sftp.close()
-        if client:
-            if port == 21:
-                try:
-                    client.quit()
-                except Exception:
-                    pass
-            else:
-                client.close()
+        if ftp_client:
+            try:
+                ftp_client.quit()
+            except Exception:
+                pass
 
 
 @blueprint.route('/explorer/read-file', methods=['POST'])
@@ -181,74 +256,56 @@ def read_file():
 
     hostname, port, username, password, data = params
     path = data.get('path', '')
-
     if not path:
         return jsonify({"status": "error", "message": "No file path specified."}), 400
 
-    client = None
-    sftp = None
+    ftp_client = None
 
     try:
         filename = os.path.basename(path)
-        content = None
         file_size = 0
 
         if port == 21:
-            # FTP mode
-            client = connect_ftp(hostname, port, username, password)
-
-            # Check file size first
+            ftp_client = connect_ftp(hostname, port, username, password)
             try:
-                file_size = client.size(path) or 0
+                file_size = ftp_client.size(path) or 0
             except Exception:
                 file_size = 0
 
-            if file_size > MAX_FILE_SIZE:
-                return jsonify({
-                    "status": "error",
-                    "message": f"File too large ({_format_size(file_size)}). Max: {_format_size(MAX_FILE_SIZE)}."
-                }), 400
+            if file_size > _get_max_file_size():
+                return jsonify({"status": "error", "message": f"File too large ({_format_size(file_size)}). Max: {_format_size(_get_max_file_size())}."}), 400
 
-            # Download file content into memory
             buffer = BytesIO()
-            client.retrbinary(f'RETR {path}', buffer.write)
+            ftp_client.retrbinary(f'RETR {path}', buffer.write)
             raw = buffer.getvalue()
-
         else:
-            # SFTP mode
-            client, sftp = connect_sftp(hostname, port, username, password)
-
-            # Check file size first
+            ssh, sftp, from_pool = _get_sftp(hostname, port, username, password)
             try:
-                file_stat = sftp.stat(path)
-                file_size = file_stat.st_size or 0
-            except IOError:
-                return jsonify({
-                    "status": "error",
-                    "message": f"File not found: {path}"
-                }), 404
+                try:
+                    file_stat = sftp.stat(path)
+                    file_size = file_stat.st_size or 0
+                except IOError:
+                    return jsonify({"status": "error", "message": f"File not found: {path}"}), 404
 
-            if file_size > MAX_FILE_SIZE:
-                return jsonify({
-                    "status": "error",
-                    "message": f"File too large ({_format_size(file_size)}). Max: {_format_size(MAX_FILE_SIZE)}."
-                }), 400
+                if file_size > _get_max_file_size():
+                    return jsonify({"status": "error", "message": f"File too large ({_format_size(file_size)}). Max: {_format_size(_get_max_file_size())}."}), 400
 
-            # Read file content
-            with sftp.open(path, 'r') as f:
-                raw = f.read()
+                with sftp.open(path, 'r') as f:
+                    raw = f.read()
+            except Exception:
+                _invalidate_pool_entry(hostname, port, username, password)
+                raise
+            finally:
+                _release_sftp(sftp, from_pool)
 
-        # Try to decode as text
+        # Decode
         try:
             content = raw.decode('utf-8')
         except (UnicodeDecodeError, AttributeError):
             try:
                 content = raw.decode('latin-1')
             except Exception:
-                return jsonify({
-                    "status": "error",
-                    "message": "Cannot decode file: it appears to be a binary file."
-                }), 400
+                return jsonify({"status": "error", "message": "Cannot decode file: it appears to be a binary file."}), 400
 
         return jsonify({
             "status": "ok",
@@ -260,26 +317,15 @@ def read_file():
         })
 
     except ConnectionRefusedError:
-        return jsonify({
-            "status": "error",
-            "message": "Connection refused. Check host and port."
-        }), 500
+        return jsonify({"status": "error", "message": "Connection refused. Check host and port."}), 500
     except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": f"Error: {str(e)}"
-        }), 500
+        return jsonify({"status": "error", "message": f"Error: {str(e)}"}), 500
     finally:
-        if sftp:
-            sftp.close()
-        if client:
-            if port == 21:
-                try:
-                    client.quit()
-                except Exception:
-                    pass
-            else:
-                client.close()
+        if ftp_client:
+            try:
+                ftp_client.quit()
+            except Exception:
+                pass
 
 
 @blueprint.route('/explorer/save-file', methods=['POST'])
@@ -299,22 +345,25 @@ def save_file():
     if not all([hostname, username, password, path]):
         return jsonify({"status": "error", "message": "Missing parameters."}), 400
 
-    client = None
-    sftp = None
+    ftp_client = None
 
     try:
         raw = content.encode('utf-8')
 
         if port == 21:
-            # FTP mode
-            client = connect_ftp(hostname, port, username, password)
+            ftp_client = connect_ftp(hostname, port, username, password)
             buffer = BytesIO(raw)
-            client.storbinary(f'STOR {path}', buffer)
+            ftp_client.storbinary(f'STOR {path}', buffer)
         else:
-            # SFTP mode
-            client, sftp = connect_sftp(hostname, port, username, password)
-            with sftp.open(path, 'w') as f:
-                f.write(raw)
+            ssh, sftp, from_pool = _get_sftp(hostname, port, username, password)
+            try:
+                with sftp.open(path, 'w') as f:
+                    f.write(raw)
+            except Exception:
+                _invalidate_pool_entry(hostname, port, username, password)
+                raise
+            finally:
+                _release_sftp(sftp, from_pool)
 
         return jsonify({
             "status": "ok",
@@ -324,26 +373,173 @@ def save_file():
         })
 
     except ConnectionRefusedError:
-        return jsonify({
-            "status": "error",
-            "message": "Connection refused. Check host and port."
-        }), 500
+        return jsonify({"status": "error", "message": "Connection refused. Check host and port."}), 500
     except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": f"Save error: {str(e)}"
-        }), 500
+        return jsonify({"status": "error", "message": f"Save error: {str(e)}"}), 500
     finally:
-        if sftp:
-            sftp.close()
-        if client:
-            if port == 21:
+        if ftp_client:
+            try:
+                ftp_client.quit()
+            except Exception:
+                pass
+
+
+@blueprint.route('/explorer/create-file', methods=['POST'])
+def create_file():
+    """Create a new empty file (or with initial content) on the remote server."""
+    params = _get_connection_params()
+    if not params:
+        return jsonify({"status": "error", "message": "Missing connection parameters."}), 400
+
+    hostname, port, username, password, data = params
+    path = data.get('path', '')
+    content = data.get('content', '')
+
+    if not path:
+        return jsonify({"status": "error", "message": "No file path specified."}), 400
+
+    ftp_client = None
+
+    try:
+        raw = content.encode('utf-8')
+
+        if port == 21:
+            ftp_client = connect_ftp(hostname, port, username, password)
+            buffer = BytesIO(raw)
+            ftp_client.storbinary(f'STOR {path}', buffer)
+        else:
+            ssh, sftp, from_pool = _get_sftp(hostname, port, username, password)
+            try:
+                # Check that the file does NOT already exist
                 try:
-                    client.quit()
-                except Exception:
-                    pass
+                    sftp.stat(path)
+                    return jsonify({"status": "error", "message": f"File already exists: {path}"}), 409
+                except IOError:
+                    pass  # expected — file doesn't exist yet
+
+                with sftp.open(path, 'w') as f:
+                    f.write(raw)
+            except Exception:
+                _invalidate_pool_entry(hostname, port, username, password)
+                raise
+            finally:
+                _release_sftp(sftp, from_pool)
+
+        return jsonify({"status": "ok", "message": f"File created: {path}", "path": path})
+
+    except ConnectionRefusedError:
+        return jsonify({"status": "error", "message": "Connection refused. Check host and port."}), 500
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Error: {str(e)}"}), 500
+    finally:
+        if ftp_client:
+            try:
+                ftp_client.quit()
+            except Exception:
+                pass
+
+
+@blueprint.route('/explorer/create-dir', methods=['POST'])
+def create_dir():
+    """Create a new directory on the remote server."""
+    params = _get_connection_params()
+    if not params:
+        return jsonify({"status": "error", "message": "Missing connection parameters."}), 400
+
+    hostname, port, username, password, data = params
+    path = data.get('path', '')
+
+    if not path:
+        return jsonify({"status": "error", "message": "No directory path specified."}), 400
+
+    ftp_client = None
+
+    try:
+        if port == 21:
+            ftp_client = connect_ftp(hostname, port, username, password)
+            ftp_client.mkd(path)
+        else:
+            ssh, sftp, from_pool = _get_sftp(hostname, port, username, password)
+            try:
+                sftp.mkdir(path)
+            except Exception:
+                _invalidate_pool_entry(hostname, port, username, password)
+                raise
+            finally:
+                _release_sftp(sftp, from_pool)
+
+        return jsonify({"status": "ok", "message": f"Directory created: {path}", "path": path})
+
+    except ConnectionRefusedError:
+        return jsonify({"status": "error", "message": "Connection refused. Check host and port."}), 500
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Error: {str(e)}"}), 500
+    finally:
+        if ftp_client:
+            try:
+                ftp_client.quit()
+            except Exception:
+                pass
+
+
+@blueprint.route('/explorer/delete-entry', methods=['POST'])
+def delete_entry():
+    """Delete a file or directory (recursively) on the remote server."""
+    params = _get_connection_params()
+    if not params:
+        return jsonify({"status": "error", "message": "Missing connection parameters."}), 400
+
+    hostname, port, username, password, data = params
+    path = data.get('path', '')
+    is_dir = data.get('is_dir', False)
+
+    if not path or path in ('/', ''):
+        return jsonify({"status": "error", "message": "Refusing to delete root path."}), 400
+
+    ftp_client = None
+
+    def _sftp_rmdir_recursive(sftp, remote_path):
+        """Recursively remove a directory tree via SFTP."""
+        for attr in sftp.listdir_attr(remote_path):
+            child = remote_path.rstrip('/') + '/' + attr.filename
+            if stat.S_ISDIR(attr.st_mode):
+                _sftp_rmdir_recursive(sftp, child)
             else:
-                client.close()
+                sftp.remove(child)
+        sftp.rmdir(remote_path)
+
+    try:
+        if port == 21:
+            ftp_client = connect_ftp(hostname, port, username, password)
+            if is_dir:
+                ftp_client.rmd(path)
+            else:
+                ftp_client.delete(path)
+        else:
+            ssh, sftp, from_pool = _get_sftp(hostname, port, username, password)
+            try:
+                if is_dir:
+                    _sftp_rmdir_recursive(sftp, path)
+                else:
+                    sftp.remove(path)
+            except Exception:
+                _invalidate_pool_entry(hostname, port, username, password)
+                raise
+            finally:
+                _release_sftp(sftp, from_pool)
+
+        return jsonify({"status": "ok", "message": f"Deleted: {path}"})
+
+    except ConnectionRefusedError:
+        return jsonify({"status": "error", "message": "Connection refused. Check host and port."}), 500
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Error: {str(e)}"}), 500
+    finally:
+        if ftp_client:
+            try:
+                ftp_client.quit()
+            except Exception:
+                pass
 
 
 @blueprint.route('/explorer/read-image', methods=['POST'])
@@ -356,68 +552,56 @@ def read_image():
 
     hostname, port, username, password, data = params
     path = data.get('path', '')
-
     if not path:
         return jsonify({"status": "error", "message": "No file path specified."}), 400
 
-    client = None
-    sftp = None
+    ftp_client = None
 
     try:
         if port == 21:
-            # FTP mode
-            client = connect_ftp(hostname, port, username, password)
+            ftp_client = connect_ftp(hostname, port, username, password)
             file_size = 0
             try:
-                file_size = client.size(path) or 0
+                file_size = ftp_client.size(path) or 0
             except Exception:
                 pass
-            
-            if file_size > MAX_FILE_SIZE:
-                return jsonify({
-                    "status": "error",
-                    "message": f"Image too large ({_format_size(file_size)}). Max: {_format_size(MAX_FILE_SIZE)}."
-                }), 400
-            
+
+            if file_size > _get_max_file_size():
+                return jsonify({"status": "error", "message": f"Image too large ({_format_size(file_size)}). Max: {_format_size(_get_max_file_size())}."}), 400
+
             buffer = BytesIO()
-            client.retrbinary(f'RETR {path}', buffer.write)
+            ftp_client.retrbinary(f'RETR {path}', buffer.write)
             raw = buffer.getvalue()
         else:
-            # SFTP mode
-            client, sftp = connect_sftp(hostname, port, username, password)
+            ssh, sftp, from_pool = _get_sftp(hostname, port, username, password)
             try:
-                file_stat = sftp.stat(path)
-                file_size = file_stat.st_size or 0
-            except IOError:
-                return jsonify({"status": "error", "message": f"File not found: {path}"}), 404
-            
-            if file_size > MAX_FILE_SIZE:
-                return jsonify({
-                    "status": "error",
-                    "message": f"Image too large ({_format_size(file_size)}). Max: {_format_size(MAX_FILE_SIZE)}."
-                }), 400
-                
-            with sftp.open(path, 'rb') as f:
-                raw = f.read()
+                try:
+                    file_stat = sftp.stat(path)
+                    file_size = file_stat.st_size or 0
+                except IOError:
+                    return jsonify({"status": "error", "message": f"File not found: {path}"}), 404
+
+                if file_size > _get_max_file_size():
+                    return jsonify({"status": "error", "message": f"Image too large ({_format_size(file_size)}). Max: {_format_size(_get_max_file_size())}."}), 400
+
+                with sftp.open(path, 'rb') as f:
+                    raw = f.read()
+            except Exception:
+                _invalidate_pool_entry(hostname, port, username, password)
+                raise
+            finally:
+                _release_sftp(sftp, from_pool)
 
         encoded = base64.b64encode(raw).decode('utf-8')
-        return jsonify({
-            "status": "ok",
-            "image_data": encoded
-        })
+        return jsonify({"status": "ok", "image_data": encoded})
 
     except ConnectionRefusedError:
         return jsonify({"status": "error", "message": "Connection refused. Check host and port."}), 500
     except Exception as e:
         return jsonify({"status": "error", "message": f"Error: {str(e)}"}), 500
     finally:
-        if sftp:
-            sftp.close()
-        if client:
-            if port == 21:
-                try:
-                    client.quit()
-                except Exception:
-                    pass
-            else:
-                client.close()
+        if ftp_client:
+            try:
+                ftp_client.quit()
+            except Exception:
+                pass

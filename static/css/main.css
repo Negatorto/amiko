@@ -1,29 +1,34 @@
 /* 
  * AMIKO - Main CSS
- * Structural Styling & Base Layout Elements
- * Design tokens (colors) are now loaded from the themes/ directory.
+ * Desktop Mode Layout — Ubuntu/GNOME inspired
+ * Design tokens (colors) loaded from themes/ directory.
  */
 
-/* Reset and Base Styles */
+/* ═══════════════════════════════════════════
+   Reset & Base
+═══════════════════════════════════════════ */
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
 }
 
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
 body {
     font-family: var(--font-mono);
     font-weight: var(--font-weight-normal, 400);
-    /* Fallback to 400 if not defined in other themes */
     font-size: var(--font-size-base);
     background-color: var(--bg-primary);
     color: var(--text-primary);
     line-height: 1.6;
-    min-height: 100vh;
     display: flex;
     flex-direction: column;
     position: relative;
-    overflow-x: hidden;
 }
 
 /* CRT Scanline Effect */
@@ -58,69 +63,322 @@ body::after {
             rgba(0, 0, 0, 0.3) 100%);
 }
 
-/* CRT effect disabled */
 body.no-crt::before,
 body.no-crt::after {
     display: none !important;
 }
 
-/* Header with Logo */
-header {
+/* ═══════════════════════════════════════════
+   TOP BAR (GNOME Panel)
+═══════════════════════════════════════════ */
+.top-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 52px;
     background-color: var(--bg-secondary);
-    border-bottom: 2px solid var(--text-primary);
-    padding: 15px 30px;
-    box-shadow: 0 0 20px var(--glow-primary);
-    position: relative;
-    z-index: 100;
-}
-
-.header-content {
+    border-bottom: 1px solid var(--text-dim);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4), 0 0 20px var(--glow-primary);
     display: flex;
     align-items: center;
-    gap: 20px;
-    max-width: 1400px;
-    margin: 0 auto;
+    justify-content: space-between;
+    padding: 0 8px;
+    z-index: 99999;
+    gap: 8px;
 }
 
-.logo-container {
+/* Left */
+.topbar-left {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 8px;
+    min-width: 120px;
 }
 
-.logo-img {
-    height: 60px;
+.topbar-logo {
+    height: 28px;
     width: auto;
-    filter: drop-shadow(0 0 10px var(--glow-primary));
+    filter: drop-shadow(0 0 6px var(--glow-primary));
 }
 
-.app-title {
-    font-size: 22px;
-    font-weight: var(--font-weight-bold, bold);
+.topbar-appname {
+    display: none;
+}
+
+/* Center: Clock — always in the geometric center of the topbar */
+.topbar-center {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    /* pointer-events: none so clicks pass through to elements behind */
+    pointer-events: none;
+}
+
+.topbar-clock {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.2;
+    cursor: default;
+}
+
+.topbar-time {
+    font-size: 18px;
+    font-weight: bold;
     color: var(--text-primary);
-    text-shadow: 0 0 10px var(--glow-primary);
-    letter-spacing: 2px;
-    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
-.app-subtitle {
-    font-size: var(--font-size-base);
+.topbar-date {
+    font-size: 13px;
     color: var(--text-secondary);
-    font-weight: normal;
+    letter-spacing: 0.5px;
 }
 
-/* Main Content */
-main {
-    flex: 1;
-    padding: 20px;
+/* Right */
+.topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 120px;
+    justify-content: flex-end;
+}
+
+/* Vitals (GNOME Vitals style) */
+.topbar-vitals {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-right: 6px;
+}
+
+.vital-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.vital-label {
+    font-size: 15px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    min-width: 48px;
+}
+
+.vital-bar-track {
+    width: 87px;
+    height: 14px;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--text-dim);
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.vital-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease, background-color 0.5s ease;
+}
+
+.vital-bar-fill.low {
+    background-color: var(--text-primary);
+    box-shadow: 0 0 4px var(--glow-primary);
+}
+
+.vital-bar-fill.medium {
+    background-color: var(--accent-amber);
+    box-shadow: 0 0 4px var(--glow-amber, #ffaa00);
+}
+
+.vital-bar-fill.high {
+    background-color: var(--accent-red, #ff3333);
+    box-shadow: 0 0 4px rgba(255,51,51,0.6);
+}
+
+.vital-value {
+    font-size: 15px;
+    color: var(--text-primary);
+    min-width: 45px;
+    text-align: right;
+}
+
+/* Topbar Icon Buttons */
+.topbar-btn {
     position: relative;
-    z-index: 1;
-    max-width: 1400px;
-    width: 100%;
-    margin: 0 auto;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    width: 46px;
+    height: 46px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0;
 }
 
-/* Form Elements */
+.topbar-btn:hover {
+    background-color: rgba(255,255,255,0.08);
+    color: var(--text-primary);
+    box-shadow: none;
+}
+
+.topbar-btn:active {
+    background-color: rgba(255,255,255,0.15);
+    transform: none;
+}
+
+/* Connection status dot on button */
+.topbar-conn-status-dot {
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--accent-red, #ff3333);
+    border: 1px solid var(--bg-secondary);
+    transition: background-color 0.3s;
+}
+
+.topbar-conn-status-dot.connected {
+    background-color: var(--text-primary);
+    box-shadow: 0 0 4px var(--glow-primary);
+}
+
+/* ═══════════════════════════════════════════
+   CONNECTION POPOVER (below topbar)
+═══════════════════════════════════════════ */
+.connection-popover {
+    position: fixed;
+    top: 40px;
+    right: 8px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--text-dim);
+    border-top: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6), 0 0 10px var(--glow-primary);
+    z-index: 1100;
+    min-width: 520px;
+    padding: 12px 16px;
+    animation: popover-in 0.15s ease;
+}
+
+@keyframes popover-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══════════════════════════════════════════
+   BOTTOM BAR
+═══════════════════════════════════════════ */
+.bottom-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 36px;
+    background-color: var(--bg-secondary);
+    border-top: 1px solid var(--text-dim);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    z-index: 99999;
+    gap: 8px;
+}
+
+.bottombar-brand {
+    font-size: 16px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+}
+
+.bottombar-center {
+    flex: 1;
+}
+
+.bottombar-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.bottombar-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background-color: var(--accent-red, #ff3333);
+    animation: pulse 2s infinite;
+    transition: background-color 0.3s;
+}
+
+.bottombar-dot.connected {
+    background-color: var(--text-primary);
+    box-shadow: 0 0 4px var(--glow-primary);
+    animation: none;
+}
+
+.bottombar-statustext {
+    font-size: 16px;
+    color: var(--text-dim);
+    letter-spacing: 0.5px;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+}
+
+/* ═══════════════════════════════════════════
+   Vitals: Text Mode (icon + percentage)
+═══════════════════════════════════════════ */
+/* Both vitals blocks are hidden by .hidden until connected.
+   The JS removes .hidden from the correct block based on the setting.
+   We set display:flex here (not none) so removal of .hidden is enough. */
+.vitals-text-mode {
+    display: flex;   /* visible when .hidden is removed */
+    align-items: center;
+    gap: 12px;
+    margin-right: 6px;
+}
+
+.vitals-text-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-mono);
+    font-size: 15px;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.vitals-text-icon {
+    font-size: 16px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+/* Per-icon accent colors */
+.vti-cpu  { color: var(--accent-info,    #00bcd4); }
+.vti-ram  { color: var(--text-primary); }
+.vti-disk { color: var(--accent-amber,   #f0c040); }
+
+/* Matching value text colors */
+.vv-cpu  { color: var(--accent-info,    #00bcd4); }
+.vv-ram  { color: var(--text-primary); }
+.vv-disk { color: var(--accent-amber,   #f0c040); }
+
+.vitals-text-value {
+    font-size: 15px;
+    font-weight: bold;
+    min-width: 44px;
+}
+
 input[type="text"],
 input[type="number"],
 input[type="password"],
@@ -128,7 +386,7 @@ select {
     background-color: var(--bg-secondary);
     border: 1px solid var(--text-dim);
     color: var(--text-primary);
-    padding: 10px 15px;
+    padding: 7px 10px;
     font-family: var(--font-mono);
     font-size: var(--font-size-base);
     border-radius: 0;
@@ -141,7 +399,7 @@ input[type="number"]:focus,
 input[type="password"]:focus,
 select:focus {
     border-color: var(--text-primary);
-    box-shadow: 0 0 10px var(--glow-primary);
+    box-shadow: 0 0 8px var(--glow-primary);
 }
 
 input::placeholder {
@@ -154,35 +412,36 @@ label {
     text-transform: uppercase;
     letter-spacing: 1px;
     display: block;
-    margin-bottom: 5px;
+    margin-bottom: 4px;
 }
 
-/* Buttons */
+/* ═══════════════════════════════════════════
+   Buttons (global)
+═══════════════════════════════════════════ */
 button {
     background-color: var(--bg-secondary);
-    border: 2px solid var(--text-primary);
+    border: 1px solid var(--text-primary);
     color: var(--text-primary);
-    padding: 10px 25px;
+    padding: 7px 18px;
     font-family: var(--font-mono);
     font-size: var(--font-size-base);
     font-weight: var(--font-weight-bold, bold);
     cursor: pointer;
     text-transform: uppercase;
     letter-spacing: 1px;
-    transition: all 0.3s;
+    transition: all 0.2s;
     position: relative;
 }
 
 button:hover {
     background-color: var(--accent-highlight, var(--text-primary));
-    /* Fallback to text primary if no highlight var */
     border-color: var(--accent-highlight, var(--text-primary));
     color: var(--bg-primary);
-    box-shadow: 0 0 20px var(--glow-primary);
+    box-shadow: 0 0 12px var(--glow-primary);
 }
 
 button:active {
-    transform: scale(0.98);
+    transform: scale(0.97);
 }
 
 button:disabled {
@@ -195,9 +454,9 @@ button:disabled {
 button:disabled:hover {
     background-color: var(--bg-secondary);
     color: var(--text-dim);
+    transform: none;
 }
 
-/* Accent Buttons */
 button.btn-warning {
     border-color: var(--accent-warning);
     color: var(--accent-warning);
@@ -206,40 +465,15 @@ button.btn-warning {
 button.btn-warning:hover {
     background-color: var(--accent-warning);
     color: var(--bg-primary);
-    box-shadow: 0 0 20px var(--glow-warning);
+    box-shadow: 0 0 12px var(--glow-warning);
 }
 
-/* Footer */
-footer {
-    background-color: var(--bg-secondary);
-    border-top: 1px solid var(--text-dim);
-    padding: 15px;
-    text-align: center;
-    color: var(--text-dim);
-    font-size: var(--font-size-base);
-}
-
-footer .heart {
-    color: var(--accent-danger);
-    animation: heartbeat 1.5s infinite;
-}
-
-@keyframes heartbeat {
-
-    0%,
-    100% {
-        transform: scale(1);
-    }
-
-    50% {
-        transform: scale(1.1);
-    }
-}
-
-/* Scrollbar Styling */
+/* ═══════════════════════════════════════════
+   Scrollbar
+═══════════════════════════════════════════ */
 ::-webkit-scrollbar {
-    width: 12px;
-    height: 12px;
+    width: 8px;
+    height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -248,15 +482,16 @@ footer .heart {
 
 ::-webkit-scrollbar-thumb {
     background: var(--text-dim);
-    border: 1px solid var(--text-primary);
+    border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
     background: var(--text-secondary);
-    box-shadow: 0 0 10px var(--glow-primary);
 }
 
-/* Utility Classes */
+/* ═══════════════════════════════════════════
+   Utility Classes
+═══════════════════════════════════════════ */
 .hidden {
     display: none !important;
 }
@@ -265,32 +500,23 @@ footer .heart {
     text-shadow: 0 0 10px currentColor;
 }
 
-.text-warning {
-    color: var(--accent-warning);
-}
+.text-warning  { color: var(--accent-warning); }
+.text-danger   { color: var(--accent-danger); }
+.text-info     { color: var(--accent-info); }
 
-.text-danger {
-    color: var(--accent-danger);
-}
-
-.text-info {
-    color: var(--accent-info);
-}
-
-/* Xterm.js Terminal Container */
+/* ═══════════════════════════════════════════
+   Xterm Terminal
+═══════════════════════════════════════════ */
 .terminal-container {
     height: 500px;
-    /* Altezza fissa per il terminale */
     background-color: #000;
     border: 1px solid var(--text-dim);
     padding: 5px;
     margin-top: 10px;
     overflow: hidden;
-    /* Xterm gestisce lo scroll */
     position: relative;
 }
 
-/* Header style for terminal */
 .terminal-header {
     background-color: var(--bg-secondary);
     padding: 5px 10px;
@@ -300,59 +526,27 @@ footer .heart {
     font-size: 12px;
     color: var(--text-secondary);
     margin: -5px -5px 5px -5px;
-    /* Compensate padding */
 }
 
 #terminal {
     width: 100%;
     height: calc(100% - 30px);
-    /* Adjust for header */
 }
 
-/* Xterm overrides for CRT theme */
 .xterm-viewport {
     background-color: transparent !important;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-    :root {
-        --font-size-base: 12px;
-        --font-size-large: 14px;
-        --font-size-small: 10px;
-    }
-
-    header {
-        padding: 10px 15px;
-    }
-
-    .header-content {
-        flex-direction: column;
-        gap: 10px;
-    }
-
-    .logo-img {
-        height: 48px;
-    }
-
-    .app-title {
-        font-size: 18px;
-    }
-
-    main {
-        padding: 10px;
-    }
-}
-
-/* --- Global WinBox Theme Overrides --- */
+/* ═══════════════════════════════════════════
+   WinBox AMIKO Theme Overrides
+═══════════════════════════════════════════ */
 .winbox.wb-amiko {
     background: var(--bg-secondary) !important;
-    border: 2px solid var(--text-primary) !important;
+    border: 1px solid var(--text-primary) !important;
     box-shadow: 0 0 15px var(--glow-primary) !important;
     border-radius: 0 !important;
 }
 
-/* Retro Inner Frame */
 .winbox.wb-amiko::after {
     content: "";
     position: absolute;
@@ -360,12 +554,11 @@ footer .heart {
     left: 3px;
     right: 3px;
     bottom: 3px;
-    border: 1px solid var(--text-primary);
+    border: 1px solid rgba(255,255,255,0.05);
     pointer-events: none;
-    z-index: 9999; /* Ensure it stays above content */
+    z-index: 9999;
 }
 
-/* Remove inner frame for Explorer popup */
 .winbox.wb-amiko.wb-amiko-explorer::after {
     display: none !important;
 }
@@ -378,7 +571,7 @@ footer .heart {
 
 .winbox.wb-amiko .wb-title {
     font-family: var(--font-mono) !important;
-    font-size: 14px !important;
+    font-size: 13px !important;
     font-weight: bold !important;
     color: var(--text-primary) !important;
     text-transform: uppercase !important;
@@ -389,26 +582,23 @@ footer .heart {
     color: var(--text-primary) !important;
 }
 
-/* Hover effects for custom controls */
 .winbox.wb-amiko .wb-control * {
     transition: all 0.2s;
 }
+
 .winbox.wb-amiko .wb-control *:hover {
     transform: scale(1.2);
 }
 
-/* Alert Specific Styles */
-.winbox.wb-amiko-error { border-color: var(--accent-danger) !important; box-shadow: 0 0 15px var(--accent-danger) !important; }
-.winbox.wb-amiko-error .wb-header { border-bottom-color: var(--accent-danger) !important; color: var(--accent-danger) !important; }
-.winbox.wb-amiko-error::after { border-color: var(--accent-danger) !important; }
+/* Alert WinBox variants */
+.winbox.wb-amiko-error  { border-color: var(--accent-danger) !important;  box-shadow: 0 0 15px var(--accent-danger) !important; }
+.winbox.wb-amiko-error  .wb-header { border-bottom-color: var(--accent-danger) !important; color: var(--accent-danger) !important; }
 
 .winbox.wb-amiko-success { border-color: var(--text-primary) !important; box-shadow: 0 0 15px var(--glow-primary) !important; }
-.winbox.wb-amiko-success .wb-header { border-bottom-color: var(--text-primary) !important; color: var(--text-primary) !important; }
-.winbox.wb-amiko-success::after { border-color: var(--text-primary) !important; }
+.winbox.wb-amiko-success .wb-header { border-bottom-color: var(--text-primary) !important; }
 
 .winbox.wb-amiko-warning { border-color: var(--accent-warning) !important; box-shadow: 0 0 15px var(--accent-warning) !important; }
 .winbox.wb-amiko-warning .wb-header { border-bottom-color: var(--accent-warning) !important; color: var(--accent-warning) !important; }
-.winbox.wb-amiko-warning::after { border-color: var(--accent-warning) !important; }
 
 .amiko-alert-content {
     padding: 20px;
@@ -421,25 +611,31 @@ footer .heart {
     font-family: var(--font-mono);
     font-size: var(--font-size-base, 14px);
     color: inherit;
-    border-top: 2px solid currentColor;
+    border-top: 1px solid currentColor;
     background: var(--bg-primary);
     overflow-y: auto;
     overflow-wrap: break-word;
     word-break: break-word;
     box-sizing: border-box;
 }
-.winbox.wb-amiko-error .amiko-alert-content { color: var(--accent-danger); }
+
+.winbox.wb-amiko-error   .amiko-alert-content { color: var(--accent-danger); }
 .winbox.wb-amiko-success .amiko-alert-content { color: var(--text-primary); }
 .winbox.wb-amiko-warning .amiko-alert-content { color: var(--accent-warning); }
 
-/* Remove WinBox controls we don't need on alerts */
-.winbox.wb-amiko-error .wb-min, .winbox.wb-amiko-error .wb-max, .winbox.wb-amiko-error .wb-full,
+.winbox.wb-amiko-error .wb-min,   .winbox.wb-amiko-error .wb-max,   .winbox.wb-amiko-error .wb-full,
 .winbox.wb-amiko-success .wb-min, .winbox.wb-amiko-success .wb-max, .winbox.wb-amiko-success .wb-full,
 .winbox.wb-amiko-warning .wb-min, .winbox.wb-amiko-warning .wb-max, .winbox.wb-amiko-warning .wb-full {
     display: none !important;
 }
 
-/* Injected from index.html inline styles */
+/* winbox overlay */
+#winbox-overlay {
+    background: rgba(0, 0, 0, 0.65) !important;
+    backdrop-filter: blur(4px);
+}
+
+/* grid-stack compat */
 .amiko-grid-wrapper {
     flex: 1;
     position: relative;

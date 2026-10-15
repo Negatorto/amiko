@@ -1,12 +1,13 @@
 <p align="center">
-  <img src="static/img/AMIKO.png" alt="AMIKO Logo" width="200">
+  <img src="static/img/AMIKO.png" alt="AMIKO Logo" width="230">
 </p>
 
 # AMIKO
 
+
 **Advanced Multi-function Interface Kit for Operations**
 
-AMIKO is a modular, web-based dashboard for remote server management. It provides a drag-and-drop workspace where each tool runs as an independent, self-contained module.
+AMIKO is a modular, web-based dashboard for remote server management built around a **desktop-environment UI** inspired by Ubuntu/GNOME. Each tool runs as an independent floating window (powered by WinBox.js) opened from a vertical sidebar dock.
 
 Built with Flask and WebSocket, it connects to remote servers via SSH/SFTP and presents all operations through a single, unified interface.
 
@@ -15,9 +16,10 @@ Built with Flask and WebSocket, it connects to remote servers via SSH/SFTP and p
 ## Features
 
 - **Modular architecture** — each tool is an isolated plugin with its own UI, logic, and optional backend routes. Modules are auto-discovered at startup.
-- **Drag-and-drop workspace** — arrange modules freely on a grid layout powered by GridStack.js. Save, load, and switch between workspace configurations.
+- **Desktop-style UI** — a fixed top bar (clock, vitals, connection), a vertical sidebar dock, and floating WinBox windows that stay within the desktop area.
 - **Global connection** — connect once, and all modules share the same SSH/SFTP session. No need to re-enter credentials per tool.
-- **Persistent settings** — server profiles, workspace layouts, and preferences are saved across sessions.
+- **SSH connection pool** — the Explorer module reuses SSH transports across requests, eliminating per-request handshake overhead.
+- **Persistent layouts** — save and restore open-module configurations across sessions.
 
 ## Included Modules
 
@@ -83,9 +85,16 @@ amiko/
 │   └── index.html          # Application shell
 ├── static/
 │   ├── css/
-│   │   ├── main.css        # Core styles
+│   │   ├── main.css        # Core styles + top/bottom bar + WinBox theme
+│   │   ├── modules.css     # Sidebar dock + desktop area
+│   │   ├── connection.css  # Connection popover
 │   │   └── themes/         # Theme CSS files
-│   ├── js/                 # Application scripts
+│   ├── js/
+│   │   ├── app.js          # Global dialogs (AmikoAlert / AmikoConfirm / AmikoPrompt)
+│   │   ├── drag-drop.js    # Desktop launcher (WinBox) + module registry
+│   │   ├── connection.js   # SSH connection management
+│   │   ├── settings.js     # Settings overlay
+│   │   └── theme.js        # Theme switcher
 │   └── lib/                # Third-party libraries (xterm, socket.io)
 ├── modules/                # Plugin modules (auto-discovered)
 │   ├── explorer/
@@ -109,8 +118,8 @@ AMIKO ships more themes, ranging from dark terminals to light palettes. Each the
 New modules can be added without modifying the core application. Each module lives in its own folder under `modules/` and consists of:
 
 - `module.json` — metadata (name, icon, description)
-- `template.html` — the UI fragment rendered inside the grid
-- `client.js` — frontend logic
+- `template.html` — the UI fragment rendered inside a WinBox window
+- `client.js` — frontend logic (class-based, scoped to the module container)
 - `backend.py` *(optional)* — Flask Blueprint for server-side API routes
 
 See [MODULE_GUIDELINES.md](MODULE_GUIDELINES.md) for the complete development guide.
@@ -133,8 +142,17 @@ AMIKO is in early development (v0.3). The core architecture is functional, but t
 - [ ] Role-based access control (admin, operator)
 
 ### UI/UX
+- [x] Desktop-environment UI (top bar, sidebar dock, floating WinBox windows)
+- [x] GNOME Vitals-style CPU/RAM/DISK monitor in top bar
+- [x] Live clock in top bar
+- [x] Connection panel as topbar popover
 - [ ] Settings panel improvements (export/import config, server management)
-- [ ] Enhanced text editor in Explorer (syntax highlighting, line numbers, search)
+- [ ] Enhanced text editor in Explorer (syntax highlighting, search/replace)
+
+### Performance
+- [x] SSH connection pool in Explorer (eliminates per-request handshake)
+- [x] Debounced line-number rendering in the file editor
+- [x] AbortController for Explorer directory navigation
 
 ## License
 

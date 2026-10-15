@@ -1,32 +1,43 @@
 /* 
- * AMIKO - Global Connection Panel CSS
- * Unified login system styles
+ * AMIKO - Connection CSS
+ * Desktop Mode: Connection as topbar popover
  */
 
-/* Connection Panel */
-.connection-panel {
-    margin: 15px auto 0;
-    padding: 15px;
-    background-color: var(--bg-tertiary);
+/* ── Connection Popover ──────────────────────── */
+.connection-popover {
+    position: fixed;
+    top: 52px;
+    right: 8px;
+    background-color: var(--bg-secondary);
     border: 1px solid var(--text-dim);
-    border-radius: 0;
-    max-width: 1400px;
-    width: 100%;
+    border-top: 2px solid var(--text-primary);
+    box-shadow: 0 8px 28px rgba(0,0,0,0.7), 0 0 12px var(--glow-primary);
+    z-index: 9999;
+    min-width: 540px;
+    padding: 14px 16px;
+    animation: popover-in 0.15s ease;
+}
+
+@keyframes popover-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
 .connection-title {
-    font-size: var(--font-size-base);
+    font-size: 11px;
     color: var(--text-primary);
     text-transform: uppercase;
     letter-spacing: 2px;
     margin-bottom: 10px;
-    text-shadow: 0 0 10px var(--glow-primary);
+    text-shadow: 0 0 8px var(--glow-primary);
+    border-bottom: 1px dashed var(--text-dim);
+    padding-bottom: 8px;
 }
 
-/* Global Login Form */
+/* ── Login Form (inline row) ──────────────────── */
 .global-login-fields {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     align-items: flex-end;
     flex-wrap: wrap;
 }
@@ -38,82 +49,71 @@
 }
 
 .form-field-inline label {
-    font-size: 11px;
+    font-size: 9px;
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 1px;
+    margin-bottom: 0;
 }
 
 .form-field-inline input,
 .form-field-inline select {
-    padding: 8px 12px;
-    font-size: var(--font-size-small);
+    padding: 6px 8px;
+    font-size: 12px;
+    height: 30px;
 }
 
-.btn-connect,
-.btn-disconnect {
-    padding: 8px 20px;
-    font-size: var(--font-size-small);
+#saved_servers { width: 120px; }
+#global_hostname { width: 130px; }
+#global_port { width: 60px; }
+#global_username { width: 90px; }
+#global_password { width: 100px; }
+
+.btn-connect {
+    padding: 6px 14px;
+    font-size: 11px;
+    height: 30px;
+    white-space: nowrap;
 }
 
-.btn-disconnect {
-    border: 1px solid var(--accent-red);
-    color: var(--accent-red);
-    text-shadow: 0 0 5px var(--accent-red);
-    box-shadow: 0 0 5px rgba(255, 51, 51, 0.2);
-    transition: all 0.3s ease;
-    cursor: pointer;
-}
-
-.btn-disconnect:hover {
-    background-color: var(--accent-red);
-    color: #fff;
-    /* White text on red background */
-    box-shadow: 0 0 15px var(--accent-red);
-}
-
-/* Connection Status */
+/* ── Connection Status (after login) ──────────── */
 .connection-status {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 15px;
+    gap: 12px;
+    padding: 4px 0;
 }
 
 .status-indicator {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
 }
 
 .status-dot {
-    width: 12px;
-    height: 12px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
-    background-color: var(--accent-red);
-    box-shadow: 0 0 10px var(--accent-red);
-    animation: pulse 2s infinite;
+    background-color: var(--accent-red, #ff3333);
+    box-shadow: 0 0 6px var(--accent-red, #ff3333);
+    animation: pulse-status 2s infinite;
+    flex-shrink: 0;
 }
 
 .status-dot.connected {
     background-color: var(--text-primary);
-    box-shadow: 0 0 10px var(--glow-primary);
+    box-shadow: 0 0 6px var(--glow-primary);
+    animation: none;
 }
 
-@keyframes pulse {
-
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0.5;
-    }
+@keyframes pulse-status {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
 }
 
 .status-text {
-    font-size: var(--font-size-base);
+    font-size: 12px;
     color: var(--text-primary);
     font-weight: bold;
     text-transform: uppercase;
@@ -121,85 +121,88 @@
 }
 
 .connection-info {
-    font-size: var(--font-size-small);
+    font-size: 11px;
     color: var(--text-secondary);
+    flex: 1;
 }
 
-/* Resource Monitor Header (Compact) */
+.btn-disconnect {
+    padding: 5px 14px;
+    font-size: 11px;
+    border: 1px solid var(--accent-red, #ff3333);
+    color: var(--accent-red, #ff3333);
+    background: rgba(255, 51, 51, 0.08);
+    text-shadow: none;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+}
+
+.btn-disconnect:hover {
+    background-color: var(--accent-red, #ff3333);
+    color: #fff;
+    box-shadow: 0 0 10px var(--accent-red, #ff3333);
+}
+
+/* ── Resource Monitor (compact, now inside topbar) */
+/* Kept for backward compat with connection.js IDs */
 .resource-monitor-header {
-    margin: 15px auto 0;
-    padding: 10px 15px;
-    background-color: var(--bg-tertiary);
-    border: 1px solid var(--text-dim);
-    max-width: 1400px;
-    width: 100%;
+    /* Rendered inside .topbar-vitals, these styles are overridden */
 }
 
 .resource-monitor-compact {
     display: flex;
-    gap: 20px;
-    justify-content: space-between;
+    gap: 16px;
 }
 
 .resource-bar-compact {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex: 1;
 }
 
 .resource-name {
-    font-size: 10px;
+    font-size: 9px;
     color: var(--text-secondary);
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 0.5px;
     font-weight: bold;
-    min-width: 40px;
+    min-width: 28px;
 }
 
 .progress-bar-container-compact {
     flex: 1;
-    height: 16px;
+    height: 6px;
     background-color: var(--bg-primary);
     border: 1px solid var(--text-dim);
+    border-radius: 3px;
     position: relative;
     overflow: hidden;
 }
 
 .resource-value {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 9px;
     color: var(--text-primary);
-    min-width: 35px;
+    min-width: 26px;
     text-align: right;
 }
 
 /* Responsive */
 @media (max-width: 768px) {
+    .connection-popover {
+        min-width: calc(100vw - 16px);
+        right: 8px;
+    }
+
     .global-login-fields {
         flex-direction: column;
         align-items: stretch;
     }
 
-    .form-field-inline {
-        width: 100%;
+    .form-field-inline input,
+    .form-field-inline select {
+        width: 100% !important;
     }
-
-    .form-field-inline input {
-        width: 100%;
-    }
-
-    .resource-monitor-compact {
-        flex-direction: column;
-        gap: 10px;
-    }
-}
-
-/* Injected from index.html inline styles */
-#saved_servers {
-    width: 120px;
-}
-
-#global_port {
-    width: 70px;
 }

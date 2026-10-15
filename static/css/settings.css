@@ -140,50 +140,56 @@
     overflow: hidden;
 }
 
-/* Tab Sidebar */
+/* Tab Sidebar — GNOME-style icon-only */
 .settings-tabs {
-    width: 200px;
+    width: 64px;
     background-color: var(--bg-secondary);
     border-right: 1px solid var(--text-dim);
     display: flex;
     flex-direction: column;
-    padding: 15px 0;
+    padding: 10px 0;
+    align-items: center;
 }
 
 .settings-tab-btn {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 10px;
-    padding: 14px 20px;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
     background: none;
     border: none;
     border-left: 3px solid transparent;
     color: var(--text-dim);
     font-family: var(--font-mono);
-    font-size: var(--font-size-base);
     cursor: pointer;
-    text-align: left;
-    transition: all 0.2s;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    border-radius: 8px;
+    margin: 2px 0;
+    transition: all 0.18s;
+    position: relative;
 }
 
 .settings-tab-btn:hover {
     color: var(--text-primary);
     background-color: var(--bg-tertiary);
-    border-color: transparent;
-    box-shadow: none;
 }
 
 .settings-tab-btn.active {
     color: var(--text-primary);
-    border-left-color: var(--text-primary);
     background-color: var(--bg-primary);
     text-shadow: 0 0 5px var(--glow-primary);
+    box-shadow: inset 3px 0 0 var(--text-primary);
+}
+
+/* Hide text label — show only icon */
+.settings-tab-label {
+    display: none;
 }
 
 .settings-tab-icon {
-    font-size: 1.2rem;
+    font-size: 1.4rem;
+    line-height: 1;
 }
 
 /* Content Area */
@@ -769,4 +775,232 @@
 
 .btn-action-success:hover {
     background: rgba(0, 180, 80, 0.25);
+}
+
+/* ── Interface Tab ────────────────────────────────── */
+
+/* Hide emoji icons inside interface groups */
+.iface-pref-icon {
+    display: none;
+}
+
+/* Adjust header alignment when icon is hidden */
+.iface-pref-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    margin-bottom: 12px;
+}
+
+
+.iface-pref-title {
+    color: var(--text-primary);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-size: 0.95rem;
+    margin-bottom: 4px;
+}
+
+.iface-pref-desc {
+    color: var(--text-dim);
+    font-size: var(--font-size-small);
+    line-height: 1.5;
+}
+
+/* Slider row */
+.iface-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.iface-slider-label {
+    color: var(--text-dim);
+    font-size: var(--font-size-small);
+    white-space: nowrap;
+    min-width: 30px;
+}
+
+.iface-slider {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--text-dim);
+    outline: none;
+    cursor: pointer;
+}
+
+.iface-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text-primary);
+    box-shadow: 0 0 6px var(--glow-primary);
+    cursor: pointer;
+    transition: transform 0.15s;
+}
+
+.iface-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.25);
+}
+
+.iface-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text-primary);
+    box-shadow: 0 0 6px var(--glow-primary);
+    cursor: pointer;
+    border: none;
+}
+
+.iface-slider-value {
+    color: var(--text-primary);
+    font-weight: bold;
+    font-size: 0.9rem;
+    min-width: 48px;
+    text-align: right;
+    font-family: var(--font-mono);
+}
+
+/* WinBox button toggles */
+.iface-btn-toggles {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.iface-btn-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: var(--bg-primary);
+    border: 1px solid var(--text-dim);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text-secondary);
+    font-size: var(--font-size-small);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    user-select: none;
+}
+
+.iface-btn-toggle:hover {
+    border-color: var(--text-primary);
+    color: var(--text-primary);
+}
+
+.iface-btn-toggle input[type="checkbox"] {
+    display: none;
+}
+
+.iface-btn-toggle:has(input:checked) {
+    border-color: var(--text-primary);
+    color: var(--text-primary);
+    box-shadow: 0 0 8px var(--glow-primary);
+    background: rgba(var(--text-primary-rgb, 0,255,0), 0.06);
+}
+
+.iface-btn-toggle--locked {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.iface-btn-preview {
+    font-size: 1.1rem;
+    font-family: var(--font-mono);
+    line-height: 1;
+}
+
+.iface-btn-toggle em {
+    font-style: italic;
+    color: var(--text-dim);
+    font-size: 0.75em;
+}
+
+/* Save button */
+.iface-save-btn {
+    margin-top: 8px;
+    padding: 10px 28px;
+    background: rgba(0, 180, 80, 0.12);
+    border: 1px solid rgba(0, 180, 80, 0.4);
+    color: #4cff88;
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.iface-save-btn:hover:not(:disabled) {
+    background: rgba(0, 180, 80, 0.25);
+    box-shadow: 0 0 12px rgba(0, 180, 80, 0.3);
+}
+
+.iface-save-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Toggle row (checkbox + label inline) */
+.iface-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    padding: 2px 0;
+}
+
+.iface-toggle-label {
+    color: var(--text-secondary);
+    font-size: var(--font-size-base);
+}
+
+/* Radio buttons inside iface-btn-toggle */
+.iface-btn-toggle input[type="radio"] {
+    display: none;
+}
+
+.iface-btn-toggle:has(input[type="radio"]:checked) {
+    border-color: var(--text-primary);
+    color: var(--text-primary);
+    box-shadow: 0 0 8px var(--glow-primary);
+    background: rgba(var(--text-primary-rgb, 0,255,0), 0.06);
+}
+
+/* Module settings separator */
+.iface-module-separator {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 8px 0 16px;
+    color: var(--text-dim);
+    font-size: var(--font-size-small);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.iface-module-separator::before,
+.iface-module-separator::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--text-dim);
+    opacity: 0.4;
+}
+
+/* no-animations global override */
+html.no-animations *,
+html.no-animations *::before,
+html.no-animations *::after {
+    transition: none !important;
+    animation: none !important;
 }

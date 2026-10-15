@@ -325,3 +325,20 @@ def api_toggle_crt():
     enabled = data.get('enabled', True)
     result = settings.set_crt_enabled(enabled)
     return jsonify({'crt_enabled': result})
+
+
+@app.route('/api/settings/ui', methods=['GET'])
+def api_get_ui_prefs():
+    prefs = settings.get_ui_prefs()
+    # Expose active module IDs so the frontend can conditionally render
+    # module-specific settings only when that module is installed & enabled.
+    prefs['active_modules'] = [m['id'] for m in active_modules]
+    return jsonify(prefs)
+
+
+@app.route('/api/settings/ui', methods=['PUT'])
+def api_set_ui_prefs():
+    data = request.get_json() or {}
+    result = settings.set_ui_prefs(data)
+    return jsonify(result)
+

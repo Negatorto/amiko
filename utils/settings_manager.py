@@ -25,7 +25,11 @@ DEFAULT_SETTINGS = {
         "amiko-batman": True,
         "amiko-barbie": True
     },
-    "crt_enabled": True
+    "crt_enabled": True,
+    "ui_prefs": {
+        "explorer_max_file_mb": 10,
+        "winbox_buttons": ["min", "max", "full", "close"]
+    }
 }
 
 
@@ -205,3 +209,54 @@ class SettingsManager:
         self._settings["crt_enabled"] = bool(enabled)
         self._save()
         return self._settings["crt_enabled"]
+
+    # --- UI Preferences ---
+
+    _UI_DEFAULTS = {
+        "explorer_max_file_mb": 10,
+        "winbox_buttons": ["min", "max", "full", "close"],
+        "ui_font_size": 13,
+        "clock_format": "24h",
+        "animations_enabled": True,
+        "explorer_show_hidden": False,
+        "explorer_confirm_delete": True
+    }
+
+    def get_ui_prefs(self):
+        stored = self._settings.get("ui_prefs", {})
+        # Merge with defaults for forward-compatibility
+        merged = dict(self._UI_DEFAULTS)
+        merged.update(stored)
+        return merged
+
+    def set_ui_prefs(self, prefs: dict):
+        current = self.get_ui_prefs()
+        # Validate explorer_max_file_mb (1–20 MB)
+        if "explorer_max_file_mb" in prefs:
+            mb = int(prefs["explorer_max_file_mb"])
+            current["explorer_max_file_mb"] = max(1, min(20, mb))
+        # Validate winbox_buttons (must be subset of known buttons; 'close' always forced)
+        if "winbox_buttons" in prefs:
+            allowed = {"min", "max", "full"}
+            btns = [b for b in prefs["winbox_buttons"] if b in allowed]
+            if "close" not in btns:
+                btns.append("close")
+            current["winbox_buttons"] = btns
+        # UI font size (11–17 px)
+        if "ui_font_size" in prefs:
+            current["ui_font_size"] = max(11, min(17, int(prefs["ui_font_size"])))
+        # Clock format (24h / 12h)
+        if "clock_format" in prefs:
+            current["clock_format"] = "12h" if prefs["clock_format"] == "12h" else "24h"
+        # Animations toggle
+        if "animations_enabled" in prefs:
+            current["animations_enabled"] = bool(prefs["animations_enabled"])
+        # Explorer: show hidden files
+        if "explorer_show_hidden" in prefs:
+            current["explorer_show_hidden"] = bool(prefs["explorer_show_hidden"])
+        # Explorer: confirm before delete
+        if "explorer_confirm_delete" in prefs:
+            current["explorer_confirm_delete"] = bool(prefs["explorer_confirm_delete"])
+        self._settings["ui_prefs"] = current
+        self._save()
+        return current

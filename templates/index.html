@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AMIKO - Advanced Multi-function Interface Kit for Operations</title>
 
-    <!-- Custom CSSThemes -->
+    <!-- Custom CSS Themes -->
     <link rel="stylesheet" id="theme-stylesheet" href="{{ url_for('static', filename='css/themes/amiko-theme.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/connection.css') }}">
@@ -17,7 +17,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/resource-bars.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
 
-    <!-- GridStack.js CSS -->
+    <!-- GridStack.js CSS (kept for compat) -->
     <link href="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack.min.css" rel="stylesheet" />
     <!-- WinBox.js CSS -->
     <link href="https://cdn.jsdelivr.net/npm/winbox@0.2.82/dist/css/winbox.min.css" rel="stylesheet" />
@@ -35,157 +35,242 @@
             {% endfor %}
         </defs>
     </svg>
-    <!-- Header -->
-    <header>
-        <div class="header-content">
-            <div class="logo-container">
-                <img src="{{ url_for('static', filename='img/AMIKO.svg') }}" alt="AMIKO Logo" class="logo-img">
-                <div>
-                    <h1 class="app-title">AMIKO</h1>
-                    <p class="app-subtitle">Advanced Multi-function Interface Kit for Operations</p>
+
+    <!-- ══════════════════════════════════════════════ -->
+    <!-- TOP BAR (GNOME-style panel)                   -->
+    <!-- ══════════════════════════════════════════════ -->
+    <div id="top-bar" class="top-bar">
+        <!-- Left: Logo + App Name -->
+        <div class="topbar-left">
+            <img src="{{ url_for('static', filename='img/AMIKO.svg') }}" alt="AMIKO" class="topbar-logo">
+            <span class="topbar-appname">AMIKO</span>
+        </div>
+
+        <!-- Center: Clock -->
+        <div class="topbar-center">
+            <div class="topbar-clock">
+                <span id="topbar-time" class="topbar-time">--:--</span>
+                <span id="topbar-date" class="topbar-date">--- -- ---</span>
+            </div>
+        </div>
+
+        <!-- Right: Vitals + Connection + Settings -->
+        <div class="topbar-right">
+            <!-- Vitals Bar Mode (GNOME-style, visible after connect) -->
+            <div class="topbar-vitals hidden" id="resourceMonitorHeader">
+                <div class="vital-item">
+                    <span class="vital-label">CPU</span>
+                    <div class="vital-bar-track">
+                        <div class="vital-bar-fill low" id="cpuBarFillHeader" style="width:0%"></div>
+                    </div>
+                    <span class="vital-value" id="cpuValueHeader">0%</span>
+                </div>
+                <div class="vital-item">
+                    <span class="vital-label">RAM</span>
+                    <div class="vital-bar-track">
+                        <div class="vital-bar-fill low" id="ramBarFillHeader" style="width:0%"></div>
+                    </div>
+                    <span class="vital-value" id="ramValueHeader">0%</span>
+                </div>
+                <div class="vital-item">
+                    <span class="vital-label">DISK</span>
+                    <div class="vital-bar-track">
+                        <div class="vital-bar-fill low" id="diskBarFillHeader" style="width:0%"></div>
+                    </div>
+                    <span class="vital-value" id="diskValueHeader">0%</span>
                 </div>
             </div>
 
-            <button class="btn-settings" id="btnSettings" title="Impostazioni">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="3"></circle>
-                    <path
-                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-                    </path>
+            <!-- Vitals Text Mode (icon + %, visible after connect) -->
+            <div class="vitals-text-mode hidden" id="resourceMonitorText">
+                <div class="vitals-text-item">
+                    <!-- CPU: chip icon, cyan -->
+                    <svg class="vitals-text-icon vti-cpu" width="17" height="17" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="3.5" y="3.5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+                        <rect x="5.5" y="5.5" width="5" height="5" rx="0.5" fill="currentColor" opacity="0.7"/>
+                        <line x1="5" y1="3.5" x2="5" y2="1" stroke="currentColor" stroke-width="1.2"/>
+                        <line x1="8" y1="3.5" x2="8" y2="1" stroke="currentColor" stroke-width="1.2"/>
+                        <line x1="11" y1="3.5" x2="11" y2="1" stroke="currentColor" stroke-width="1.2"/>
+                        <line x1="5" y1="12.5" x2="5" y2="15" stroke="currentColor" stroke-width="1.2"/>
+                        <line x1="8" y1="12.5" x2="8" y2="15" stroke="currentColor" stroke-width="1.2"/>
+                        <line x1="11" y1="12.5" x2="11" y2="15" stroke="currentColor" stroke-width="1.2"/>
+                        <line x1="3.5" y1="5" x2="1" y2="5" stroke="currentColor" stroke-width="1.2"/>
+                        <line x1="3.5" y1="11" x2="1" y2="11" stroke="currentColor" stroke-width="1.2"/>
+                        <line x1="12.5" y1="5" x2="15" y2="5" stroke="currentColor" stroke-width="1.2"/>
+                        <line x1="12.5" y1="11" x2="15" y2="11" stroke="currentColor" stroke-width="1.2"/>
+                    </svg>
+                    <span class="vitals-text-value vv-cpu" id="cpuValueText">0%</span>
+                </div>
+                <div class="vitals-text-item">
+                    <!-- RAM: memory stick icon, green -->
+                    <svg class="vitals-text-icon vti-ram" width="17" height="17" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="1" y="4" width="14" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+                        <line x1="4" y1="4" x2="4" y2="2" stroke="currentColor" stroke-width="1.2"/>
+                        <line x1="7" y1="4" x2="7" y2="2" stroke="currentColor" stroke-width="1.2"/>
+                        <line x1="10" y1="4" x2="10" y2="2" stroke="currentColor" stroke-width="1.2"/>
+                        <line x1="13" y1="4" x2="13" y2="2" stroke="currentColor" stroke-width="1.2"/>
+                        <rect x="3" y="6.5" width="2" height="3" rx="0.4" fill="currentColor" opacity="0.8"/>
+                        <rect x="7" y="6.5" width="2" height="3" rx="0.4" fill="currentColor" opacity="0.8"/>
+                        <rect x="11" y="6.5" width="2" height="3" rx="0.4" fill="currentColor" opacity="0.8"/>
+                    </svg>
+                    <span class="vitals-text-value vv-ram" id="ramValueText">0%</span>
+                </div>
+                <div class="vitals-text-item">
+                    <!-- DISK: cylinder icon, amber -->
+                    <svg class="vitals-text-icon vti-disk" width="17" height="17" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <ellipse cx="8" cy="4.5" rx="5.5" ry="2" stroke="currentColor" stroke-width="1.5"/>
+                        <line x1="2.5" y1="4.5" x2="2.5" y2="11.5" stroke="currentColor" stroke-width="1.5"/>
+                        <line x1="13.5" y1="4.5" x2="13.5" y2="11.5" stroke="currentColor" stroke-width="1.5"/>
+                        <ellipse cx="8" cy="11.5" rx="5.5" ry="2" stroke="currentColor" stroke-width="1.5"/>
+                        <ellipse cx="10" cy="11.5" rx="1" ry="0.5" fill="currentColor" opacity="0.8"/>
+                    </svg>
+                    <span class="vitals-text-value vv-disk" id="diskValueText">0%</span>
+                </div>
+            </div>
+
+            <!-- Connection Indicator Button -->
+            <button class="topbar-btn" id="connectionToggleBtn" title="Connection" aria-expanded="false">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <!-- Monitor -->
+                    <rect x="2" y="3" width="14" height="10" rx="1"/>
+                    <!-- Monitor stand -->
+                    <line x1="9" y1="13" x2="9" y2="16"/>
+                    <line x1="6" y1="16" x2="12" y2="16"/>
+                    <!-- Ethernet cable going right -->
+                    <line x1="16" y1="8" x2="22" y2="8"/>
+                    <!-- RJ45 plug -->
+                    <rect x="20" y="6" width="4" height="4" rx="0.5"/>
+                    <!-- Connector pins -->
+                    <line x1="21" y1="6" x2="21" y2="5"/>
+                    <line x1="23" y1="6" x2="23" y2="5"/>
                 </svg>
-                <span class="btn-settings-label">Settings</span>
+                <span class="topbar-conn-status-dot" id="topbarStatusDot"></span>
+            </button>
+
+            <!-- Settings Button -->
+            <button class="topbar-btn" id="btnSettings" title="Settings">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
             </button>
         </div>
+    </div>
 
-        <!-- Global Connection Panel -->
-        <div class="connection-panel" id="connectionPanel">
-            <div class="connection-form" id="connectionForm">
-                <h3 class="connection-title">GLOBAL CONNECTION</h3>
-                <form id="globalLoginForm">
-                    <div class="global-login-fields">
-                        <div class="form-field-inline">
-                            <label for="saved_servers">SAVED SERVERS</label>
-                            <select id="saved_servers">
-                                <option value="">-- Select --</option>
-                                <option value="new">+ New Server</option>
-                            </select>
-                        </div>
-                        <div class="form-field-inline">
-                            <label for="global_hostname">HOST</label>
-                            <input type="text" id="global_hostname" placeholder="192.168.1.10" required>
-                        </div>
-                        <div class="form-field-inline">
-                            <label for="global_port">PORT</label>
-                            <input type="number" id="global_port" value="22" required>
-                        </div>
-                        <div class="form-field-inline">
-                            <label for="global_username">USER</label>
-                            <input type="text" id="global_username" placeholder="root" required>
-                        </div>
-                        <div class="form-field-inline">
-                            <label for="global_password">PASSWORD</label>
-                            <input type="password" id="global_password" placeholder="******" required>
-                        </div>
-                        <button type="submit" id="globalConnectBtn" class="btn-connect">CONNECT</button>
+    <!-- Connection Popover (dropdown below topbar) -->
+    <div class="connection-popover hidden" id="connectionPanel">
+        <div class="connection-form" id="connectionForm">
+            <h3 class="connection-title">GLOBAL CONNECTION</h3>
+            <form id="globalLoginForm">
+                <div class="global-login-fields">
+                    <div class="form-field-inline">
+                        <label for="saved_servers">SAVED</label>
+                        <select id="saved_servers">
+                            <option value="">-- Select --</option>
+                            <option value="new">+ New Server</option>
+                        </select>
                     </div>
-                </form>
-            </div>
-
-            <!-- Connection Status Indicator -->
-            <div class="connection-status hidden" id="connectionStatus">
-                <div class="status-indicator">
-                    <span class="status-dot"></span>
-                    <span class="status-text" id="statusText">DISCONNECTED</span>
+                    <div class="form-field-inline">
+                        <label for="global_hostname">HOST</label>
+                        <input type="text" id="global_hostname" placeholder="192.168.1.10" required>
+                    </div>
+                    <div class="form-field-inline">
+                        <label for="global_port">PORT</label>
+                        <input type="number" id="global_port" value="22" required>
+                    </div>
+                    <div class="form-field-inline">
+                        <label for="global_username">USER</label>
+                        <input type="text" id="global_username" placeholder="root" required>
+                    </div>
+                    <div class="form-field-inline">
+                        <label for="global_password">PASSWORD</label>
+                        <input type="password" id="global_password" placeholder="••••••" required>
+                    </div>
+                    <button type="submit" id="globalConnectBtn" class="btn-connect">CONNECT</button>
                 </div>
-                <div class="connection-info" id="connectionInfo"></div>
-                <!-- Disconnect Button -->
-                <button type="button" id="globalDisconnectBtn" class="btn-disconnect">DISCONNECT</button>
-            </div>
+            </form>
         </div>
 
-        <!-- Resource Monitor (Always Visible After Login) -->
-        <div class="resource-monitor-header hidden" id="resourceMonitorHeader">
-            <div class="resource-monitor-compact">
-                <div class="resource-bar-compact cpu">
-                    <span class="resource-name">CPU</span>
-                    <div class="progress-bar-container-compact">
-                        <div class="progress-bar-fill low" id="cpuBarFillHeader" style="width: 0%;"></div>
-                    </div>
-                    <span class="resource-value" id="cpuValueHeader">0%</span>
-                </div>
-                <div class="resource-bar-compact ram">
-                    <span class="resource-name">RAM</span>
-                    <div class="progress-bar-container-compact">
-                        <div class="progress-bar-fill low" id="ramBarFillHeader" style="width: 0%;"></div>
-                    </div>
-                    <span class="resource-value" id="ramValueHeader">0%</span>
-                </div>
-                <div class="resource-bar-compact disk">
-                    <span class="resource-name">DISK</span>
-                    <div class="progress-bar-container-compact">
-                        <div class="progress-bar-fill low" id="diskBarFillHeader" style="width: 0%;"></div>
-                    </div>
-                    <span class="resource-value" id="diskValueHeader">0%</span>
-                </div>
+        <!-- Connection Status (shown after login) -->
+        <div class="connection-status hidden" id="connectionStatus">
+            <div class="status-indicator">
+                <span class="status-dot" ></span>
+                <span class="status-text" id="statusText">DISCONNECTED</span>
             </div>
+            <div class="connection-info" id="connectionInfo"></div>
+            <button type="button" id="globalDisconnectBtn" class="btn-disconnect">DISCONNECT</button>
         </div>
-    </header>
+    </div>
 
-    <!-- Main Content -->
-    <main class="modular-main">
-        <!-- Sidebar -->
-        <aside class="module-sidebar">
-            <h3 class="sidebar-title">MODULES</h3>
+    <!-- ══════════════════════════════════════════════ -->
+    <!-- BODY: Sidebar Dock + Desktop Area             -->
+    <!-- ══════════════════════════════════════════════ -->
+    <div class="amiko-body">
 
-            <!-- Dynamic Plugins -->
+        <!-- LEFT SIDEBAR DOCK -->
+        <aside class="sidebar-dock" id="sidebarDock">
             {% for mod in modules %}
-            <div class="module-item" draggable="true" data-module-type="{{ mod.id }}">
-                <span class="module-icon">
+            <button class="dock-item" data-module-type="{{ mod.id }}" title="{{ mod.name }}" id="dock-btn-{{ mod.id }}">
+                <span class="dock-icon">
                     {% if mod.symbol %}
                         <svg class="module-icon-svg"><use href="#icon-{{ mod.id }}"></use></svg>
                     {% else %}
                         {{ mod.icon | safe | default('🧩') }}
                     {% endif %}
                 </span>
-                <span class="module-name">{{ mod.name }}</span>
-            </div>
+                <span class="dock-tooltip">{{ mod.name }}</span>
+            </button>
             {% endfor %}
         </aside>
 
-        <!-- Grid Area Wrapper -->
-        <div class="amiko-grid-wrapper">
-            <!-- Empty State Message -->
-            <div id="emptyGridMessage" class="empty-grid-message">
-                <div class="retro-text">
-                    &gt; SYSTEM STANDBY<br>
-                    &gt; PLEASE DRAG AND DROP MODULES TO BEGIN <span class="blink">_</span>
+        <!-- DESKTOP AREA -->
+        <main class="amiko-desktop" id="amikoDesktop">
+            <!-- Empty State -->
+            <div id="emptyDesktopMessage" class="empty-desktop-message">
+                <div class="empty-desktop-inner">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3">
+                        <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+                    </svg>
+                    <p class="empty-desktop-text">Click a module on the left to open it</p>
                 </div>
             </div>
 
-            <!-- GridStack Container -->
-            <div class="grid-stack" id="amikoGrid"></div>
-        </div>
-    </main>
+            <!-- GridStack Container (kept for layout compat, not used for drag) -->
+            <div class="grid-stack" id="amikoGrid" style="display:none;"></div>
+        </main>
+    </div>
 
-    <!-- Dynamic Plugin Templates -->
+    <!-- ══════════════════════════════════════════════ -->
+    <!-- BOTTOM BAR                                    -->
+    <!-- ══════════════════════════════════════════════ -->
+    <div class="bottom-bar" id="bottom-bar">
+        <span class="bottombar-brand">AMIKO v0.3</span>
+        <span class="bottombar-center"></span>
+        <div class="bottombar-status">
+            <span class="bottombar-dot" id="bottombarDot"></span>
+            <span class="bottombar-statustext" id="bottombarStatusText">Disconnected</span>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════ -->
+    <!-- Dynamic Plugin Templates                      -->
+    <!-- ══════════════════════════════════════════════ -->
     {% for mod in modules %}
     <template id="tpl-{{ mod.id }}">
         {{ mod.template_html | safe }}
     </template>
     {% endfor %}
 
-    <!-- Settings Overlay -->
+    <!-- ══════════════════════════════════════════════ -->
+    <!-- Settings Overlay (unchanged)                  -->
+    <!-- ══════════════════════════════════════════════ -->
     <div class="settings-overlay" id="settingsOverlay">
         <div class="settings-panel">
             <div class="settings-header">
                 <h2>
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="3"></circle>
-                        <path
-                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-                        </path>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                     </svg>
                     Settings
                 </h2>
@@ -193,17 +278,21 @@
             </div>
             <div class="settings-body">
                 <nav class="settings-tabs">
-                    <button class="settings-tab-btn active" data-tab="groups">
-                        <span class="settings-tab-icon">📁</span> Groups
+                    <button class="settings-tab-btn active" data-tab="groups" title="Groups">
+                        <span class="settings-tab-icon">📁</span>
+                        <span class="settings-tab-label">Groups</span>
                     </button>
-                    <button class="settings-tab-btn" data-tab="servers">
-                        <span class="settings-tab-icon">🖥️</span> Server
+                    <button class="settings-tab-btn" data-tab="servers" title="Servers">
+                        <span class="settings-tab-icon">🖥️</span>
+                        <span class="settings-tab-label">Servers</span>
                     </button>
-                    <button class="settings-tab-btn" data-tab="workspace">
-                        <span class="settings-tab-icon">📐</span> Workspace
+                    <button class="settings-tab-btn" data-tab="themes" title="Themes">
+                        <span class="settings-tab-icon">🎨</span>
+                        <span class="settings-tab-label">Themes</span>
                     </button>
-                    <button class="settings-tab-btn" data-tab="themes">
-                        <span class="settings-tab-icon">🎨</span> Themes
+                    <button class="settings-tab-btn" data-tab="interface" title="Interface">
+                        <span class="settings-tab-icon">⚙️</span>
+                        <span class="settings-tab-label">Interface</span>
                     </button>
                 </nav>
                 <div class="settings-content">
@@ -224,7 +313,7 @@
                         <div class="group-list"></div>
                     </div>
 
-                    <!-- Servers Section (Excel-like) -->
+                    <!-- Servers Section -->
                     <div class="settings-section" data-section="servers">
                         <h3 class="settings-section-title">Server Management</h3>
                         <div class="server-table-wrapper"></div>
@@ -262,61 +351,176 @@
                     <!-- Themes Section -->
                     <div class="settings-section" data-section="themes">
                         <h3 class="settings-section-title">Theme Management</h3>
+                        <!-- CRT Toggle -->
                         <div class="crt-toggle-row">
                             <label class="crt-toggle-label">
                                 <span class="crt-toggle-title">⬛ CRT EFFECT</span>
                                 <input type="checkbox" class="theme-toggle-checkbox" id="crtToggle" checked>
                             </label>
                         </div>
+                        <!-- Vitals Display Mode -->
+                        <div class="crt-toggle-row" style="margin-top: 10px;">
+                            <label class="crt-toggle-label" style="gap: 12px;">
+                                <span class="crt-toggle-title">📊 VITALS DISPLAY</span>
+                                <select id="vitalsDisplayMode" style="background: var(--bg-primary); border: 1px solid var(--text-dim); color: var(--text-primary); padding: 4px 8px; font-family: var(--font-mono); font-size: 12px; letter-spacing: 1px;">
+                                    <option value="bars">Bars (CPU ████ 48%)</option>
+                                    <option value="text">Icons (🖥 48% 💾 72%)</option>
+                                </select>
+                            </label>
+                        </div>
                         <div class="themes-grid"></div>
                     </div>
 
-                    <!-- Workspace Section -->
-                    <div class="settings-section" data-section="workspace">
-                        <div class="settings-section-header">
-                            <h3 class="settings-section-title no-margin">Workspace Configuration</h3>
-                            <button id="btnClearGrid" type="button" class="btn-action-danger">🗑️ Clear Grid</button>
+                    <!-- Interface Section -->
+                    <div class="settings-section" data-section="interface">
+                        <h3 class="settings-section-title">Interface Preferences</h3>
+
+                        <!-- ── GENERAL SETTINGS ──────────────────────── -->
+
+                        <!-- Font size -->
+                        <div class="iface-pref-group">
+                            <div class="iface-pref-header">
+                                <span class="iface-pref-icon">🔠</span>
+                                <div>
+                                    <div class="iface-pref-title">UI Font Size</div>
+                                    <div class="iface-pref-desc">Global text size across the entire interface.</div>
+                                </div>
+                            </div>
+                            <div class="iface-slider-row">
+                                <span class="iface-slider-label">11px</span>
+                                <input type="range" id="uiFontSize" min="11" max="17" step="1" value="13" class="iface-slider">
+                                <span class="iface-slider-label">17px</span>
+                                <span class="iface-slider-value" id="uiFontSizeValue">13px</span>
+                            </div>
                         </div>
 
-                        <div class="form-field settings-field-group">
-                            <label>Startup Behavior</label>
-                            <select id="startupBehaviorSelector" class="settings-select-field">
-                                <option value="empty">Start with an Empty Dashboard</option>
-                                <option value="last">Load Last Active Layout</option>
-                            </select>
+                        <!-- Clock format -->
+                        <div class="iface-pref-group">
+                            <div class="iface-pref-header">
+                                <span class="iface-pref-icon">🕐</span>
+                                <div>
+                                    <div class="iface-pref-title">Clock Format</div>
+                                    <div class="iface-pref-desc">Format used for the clock in the top bar.</div>
+                                </div>
+                            </div>
+                            <div class="iface-btn-toggles">
+                                <label class="iface-btn-toggle">
+                                    <input type="radio" name="clockFormat" id="clockFormat24" value="24h" checked>
+                                    <span class="iface-btn-preview">24h</span>
+                                    <span>24-hour &nbsp;<em>14:30</em></span>
+                                </label>
+                                <label class="iface-btn-toggle">
+                                    <input type="radio" name="clockFormat" id="clockFormat12" value="12h">
+                                    <span class="iface-btn-preview">12h</span>
+                                    <span>12-hour &nbsp;<em>2:30 PM</em></span>
+                                </label>
+                            </div>
                         </div>
 
-                        <div class="form-field settings-field-group">
-                            <label class="crt-toggle-label settings-lock-label">
-                                <span class="crt-toggle-title">🔒 LOCK WORKSPACE</span>
-                                <input type="checkbox" class="theme-toggle-checkbox" id="lockWorkspaceToggle">
+                        <!-- Animations -->
+                        <div class="iface-pref-group">
+                            <div class="iface-pref-header">
+                                <span class="iface-pref-icon">✨</span>
+                                <div>
+                                    <div class="iface-pref-title">UI Animations</div>
+                                    <div class="iface-pref-desc">Enable transitions and animations. Disable for accessibility or performance.</div>
+                                </div>
+                            </div>
+                            <label class="iface-toggle-row">
+                                <input type="checkbox" class="theme-toggle-checkbox" id="animationsEnabled" checked>
+                                <span class="iface-toggle-label">Animations enabled</span>
                             </label>
-                            <p class="settings-hint">Prevents accidental
-                                moving or resizing of grid modules.</p>
                         </div>
 
-                        <h3 class="settings-section-title settings-mt-30">Saved Layouts</h3>
-                        <div class="settings-layouts-actions">
-                            <select id="layoutSelector" class="settings-select-field settings-select-flex">
-                                <option value="" disabled selected>-- Select Layout --</option>
-                            </select>
-                            <button id="btnLoadLayout" type="button" class="btn-action-primary">📂 Load Selected</button>
-                            <button id="btnSaveLayout" type="button" class="btn-action-success">💾 Save Current</button>
-                            <button id="btnDeleteLayout" type="button" class="btn-action-danger large">🗑️ Delete Layout</button>
+                        <!-- WinBox buttons -->
+                        <div class="iface-pref-group">
+                            <div class="iface-pref-header">
+                                <span class="iface-pref-icon">🪟</span>
+                                <div>
+                                    <div class="iface-pref-title">Window Buttons</div>
+                                    <div class="iface-pref-desc">Choose which control buttons appear on module windows (like GNOME). The close button is always present.</div>
+                                </div>
+                            </div>
+                            <div class="iface-btn-toggles">
+                                <label class="iface-btn-toggle">
+                                    <input type="checkbox" id="wbBtnMin" value="min" checked>
+                                    <span class="iface-btn-preview">─</span>
+                                    <span>Minimise</span>
+                                </label>
+                                <label class="iface-btn-toggle">
+                                    <input type="checkbox" id="wbBtnMax" value="max" checked>
+                                    <span class="iface-btn-preview">□</span>
+                                    <span>Maximise</span>
+                                </label>
+                                <label class="iface-btn-toggle">
+                                    <input type="checkbox" id="wbBtnFull" value="full" checked>
+                                    <span class="iface-btn-preview">⛶</span>
+                                    <span>Full Screen</span>
+                                </label>
+                            </div>
                         </div>
+
+                        <!-- ── MODULE-SPECIFIC SETTINGS ───────────────── -->
+                        <div class="iface-module-separator">
+                            <span>Module Settings</span>
+                        </div>
+
+                        <!-- Explorer: max file size -->
+                        <div class="iface-pref-group" data-requires-module="explorer">
+                            <div class="iface-pref-header">
+                                <span class="iface-pref-icon">📂</span>
+                                <div>
+                                    <div class="iface-pref-title">Explorer — Max File Size</div>
+                                    <div class="iface-pref-desc">Maximum size of files that can be opened in the editor.</div>
+                                </div>
+                            </div>
+                            <div class="iface-slider-row">
+                                <span class="iface-slider-label">1 MB</span>
+                                <input type="range" id="explorerMaxFileMb" min="1" max="20" step="1" value="10" class="iface-slider">
+                                <span class="iface-slider-label">20 MB</span>
+                                <span class="iface-slider-value" id="explorerMaxFileMbValue">10 MB</span>
+                            </div>
+                        </div>
+
+                        <!-- Explorer: show hidden files -->
+                        <div class="iface-pref-group" data-requires-module="explorer">
+                            <div class="iface-pref-header">
+                                <span class="iface-pref-icon">👁️</span>
+                                <div>
+                                    <div class="iface-pref-title">Explorer — Show Hidden Files</div>
+                                    <div class="iface-pref-desc">Show dotfiles and hidden directories (e.g. .ssh, .bashrc).</div>
+                                </div>
+                            </div>
+                            <label class="iface-toggle-row">
+                                <input type="checkbox" class="theme-toggle-checkbox" id="explorerShowHidden">
+                                <span class="iface-toggle-label">Show hidden files</span>
+                            </label>
+                        </div>
+
+                        <!-- Explorer: confirm before delete -->
+                        <div class="iface-pref-group" data-requires-module="explorer">
+                            <div class="iface-pref-header">
+                                <span class="iface-pref-icon">🗑️</span>
+                                <div>
+                                    <div class="iface-pref-title">Explorer — Confirm Delete</div>
+                                    <div class="iface-pref-desc">Ask for confirmation before deleting files or folders.</div>
+                                </div>
+                            </div>
+                            <label class="iface-toggle-row">
+                                <input type="checkbox" class="theme-toggle-checkbox" id="explorerConfirmDelete" checked>
+                                <span class="iface-toggle-label">Ask before deleting</span>
+                            </label>
+                        </div>
+
+                        <button class="iface-save-btn" id="ifaceSaveBtn">💾 Save Interface Settings</button>
                     </div>
+
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Footer -->
-    <footer>
-        AMIKO v0.3 - Made with <span class="heart">❤️</span>
-    </footer>
-
     <!-- Library Scripts -->
-    <!-- GridStack JS -->
     <script src="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack-all.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/winbox@0.2.82/dist/winbox.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='lib/socketio/socket.io.js') }}"></script>

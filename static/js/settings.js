@@ -11,6 +11,8 @@ class SettingsPanel {
         this.initTabs();
         this.initCloseBtn();
         this.initCrtToggle();
+        this.initVitalsMode();
+        this.initInterface();
     }
 
     // --- Panel Open/Close ---
@@ -48,7 +50,7 @@ class SettingsPanel {
         if (tabName === 'groups') this.loadGroups();
         else if (tabName === 'servers') this.loadServers();
         else if (tabName === 'themes') this.loadThemes();
-        else if (tabName === 'workspace') { /* Loading handled globally by drag-drop.js */ }
+        else if (tabName === 'interface') this.loadInterface();
     }
 
     initCloseBtn() {
@@ -521,6 +523,223 @@ class SettingsPanel {
         document.body.classList.toggle('no-crt', !enabled);
     }
 
+    // --- Vitals Display Mode ---
+
+    initVitalsMode() {
+        const sel = document.getElementById('vitalsDisplayMode');
+        if (!sel) return;
+
+        // Restore saved preference
+        const saved = localStorage.getItem('amiko_vitals_mode') || 'bars';
+        sel.value = saved;
+        this._applyVitalsMode(saved);
+
+        sel.addEventListener('change', () => {
+            this._applyVitalsMode(sel.value);
+            localStorage.setItem('amiko_vitals_mode', sel.value);
+        });
+    }
+
+    _applyVitalsMode(mode) {
+        const barEl  = document.getElementById('resourceMonitorHeader');
+        const textEl = document.getElementById('resourceMonitorText');
+        // Only switch visibility when connected (both start hidden)
+        const isConnected = window.globalConnection && window.globalConnection.connected;
+        if (!isConnected) return;
+
+        if (mode === 'text') {
+            if (barEl)  barEl.classList.add('hidden');
+            if (textEl) textEl.classList.remove('hidden');
+        } else {
+            if (textEl) textEl.classList.add('hidden');
+            if (barEl)  barEl.classList.remove('hidden');
+        }
+    }
+
+    // ========================
+    // INTERFACE TAB
+    // ========================
+
+    initInterface() {
+        // Font size slider live feedback
+        const fontSlider = document.getElementById('uiFontSize');
+        const fontVal    = document.getElementById('uiFontSizeValue');
+        if (fontSlider && fontVal) {
+            fontSlider.addEventListener('input', () => {
+                fontVal.textContent = fontSlider.value + 'px';
+                document.documentElement.style.fontSize = fontSlider.value + 'px';
+            });
+        }
+
+        // Explorer max file size slider live feedback
+        const slider    = document.getElementById('explorerMaxFileMb');
+        const sliderVal = document.getElementById('explorerMaxFileMbValue');
+        if (slider && sliderVal) {
+            slider.addEventListener('input', () => {
+                sliderVal.textContent = slider.value + ' MB';
+            });
+        }
+
+        // Save button
+        const saveBtn = document.getElementById('ifaceSaveBtn');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => this.saveInterface());
+        }
+    }
+
+    async loadInterface() {
+        try {
+            const prefs = await this.api('GET', '/api/settings/ui');
+            this._applyInterfaceFormValues(prefs);
+            this._applyModuleGuards(prefs.active_modules || []);
+            this._applyUiPrefsToApp(prefs);
+        } catch(e) {
+            console.error('[Settings] Error loading interface prefs:', e);
+        }
+    }
+
+    /**
+     * Hide any .iface-pref-group[data-requires-module="X"] elements
+     * where "X" is not in the activeModules list.
+     * This makes module-specific settings disappear automatically
+     * when the module folder is removed or disabled.
+     */
+    _applyModuleGuards(activeModules) {
+        const section = this.overlay.querySelector('[data-section="interface"]');
+        if (!section) return;
+
+        const activeSet = new Set(activeModules);
+        section.querySelectorAll('[data-requires-module]').forEach(el => {
+            const required = el.dataset.requiresModule;
+            el.style.display = activeSet.has(required) ? '' : 'none';
+        });
+    }
+
+
+    _applyInterfaceFormValues(prefs) {
+        // Font size
+        const fontSlider = document.getElementById('uiFontSize');
+        const fontVal    = document.getElementById('uiFontSizeValue');
+        if (fontSlider) {
+            fontSlider.value = prefs.ui_font_size ?? 13;
+            if (fontVal) fontVal.textContent = fontSlider.value + 'px';
+        }
+
+        // Clock format
+        const fmt = prefs.clock_format ?? '24h';
+        const r24 = document.getElementById('clockFormat24');
+        const r12 = document.getElementById('clockFormat12');
+        if (r24) r24.checked = fmt === '24h';
+        if (r12) r12.checked = fmt === '12h';
+
+        // Animations
+        const animChk = document.getElementById('animationsEnabled');
+        if (animChk) animChk.checked = prefs.animations_enabled !== false;
+
+        // WinBox buttons
+        const btnMap = { min: 'wbBtnMin', max: 'wbBtnMax', full: 'wbBtnFull' };
+        const active = new Set(prefs.winbox_buttons || ['min', 'max', 'full', 'close']);
+        for (const [val, id] of Object.entries(btnMap)) {
+            const chk = document.getElementById(id);
+            if (chk) chk.checked = active.has(val);
+        }
+
+        // Explorer: max file size
+        const slider    = document.getElementById('explorerMaxFileMb');
+        const sliderVal = document.getElementById('explorerMaxFileMbValue');
+        if (slider) {
+            slider.value = prefs.explorer_max_file_mb ?? 10;
+            if (sliderVal) sliderVal.textContent = slider.value + ' MB';
+        }
+
+        // Explorer: show hidden
+        const showHidden = document.getElementById('explorerShowHidden');
+        if (showHidden) showHidden.checked = !!prefs.explorer_show_hidden;
+
+        // Explorer: confirm delete
+        const confirmDel = document.getElementById('explorerConfirmDelete');
+        if (confirmDel) confirmDel.checked = prefs.explorer_confirm_delete !== false;
+    }
+
+    async saveInterface() {
+        // General
+        const ui_font_size = parseInt(document.getElementById('uiFontSize')?.value ?? 13);
+        const clock_format = document.querySelector('input[name="clockFormat"]:checked')?.value ?? '24h';
+        const animations_enabled = document.getElementById('animationsEnabled')?.checked !== false;
+
+        // WinBox buttons
+        const buttons = ['close'];
+        const btnMap  = { min: 'wbBtnMin', max: 'wbBtnMax', full: 'wbBtnFull' };
+        for (const [val, id] of Object.entries(btnMap)) {
+            const chk = document.getElementById(id);
+            if (chk && chk.checked) buttons.push(val);
+        }
+
+        // Explorer
+        const explorer_max_file_mb  = parseInt(document.getElementById('explorerMaxFileMb')?.value ?? 10);
+        const explorer_show_hidden  = document.getElementById('explorerShowHidden')?.checked ?? false;
+        const explorer_confirm_delete = document.getElementById('explorerConfirmDelete')?.checked !== false;
+
+        try {
+            const result = await this.api('PUT', '/api/settings/ui', {
+                ui_font_size,
+                clock_format,
+                animations_enabled,
+                winbox_buttons: buttons,
+                explorer_max_file_mb,
+                explorer_show_hidden,
+                explorer_confirm_delete
+            });
+            window.amikoUiPrefs = result;
+            this._applyUiPrefsToApp(result);
+            // Visual feedback
+            const btn = document.getElementById('ifaceSaveBtn');
+            if (btn) {
+                const orig = btn.textContent;
+                btn.textContent = '✅ Saved!';
+                btn.disabled = true;
+                setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1800);
+            }
+        } catch(e) {
+            if (window.AmikoAlert) window.AmikoAlert('Error', 'Could not save interface settings.', 'error');
+        }
+    }
+
+    /**
+     * Apply UI prefs immediately to the live document (no reload needed).
+     * Called on boot, on tab open, and after save.
+     *
+     * Font scaling strategy:
+     *  - html font-size  → controls rem units (UI chrome, settings panel, etc.)
+     *  - --font-size-base / --font-size-small / --font-size-large → override theme vars
+     *  - --content-font-size → used by .amiko-module content (base + 1px for readability)
+     */
+    _applyUiPrefsToApp(prefs) {
+        const fs = prefs.ui_font_size ?? 13;  // chosen by slider
+
+        // 1. Scale rem-based UI chrome
+        document.documentElement.style.fontSize = fs + 'px';
+
+        // 2. Override theme CSS font-size variables so px-based rules scale too
+        //    base = selected value, small = base-1, large = base+2
+        const root = document.documentElement;
+        root.style.setProperty('--font-size-base',  fs + 'px');
+        root.style.setProperty('--font-size-small', (fs - 1) + 'px');
+        root.style.setProperty('--font-size-large', (fs + 2) + 'px');
+
+        // 3. Module content: slightly bigger for readability (base + 1px)
+        //    Modules use var(--content-font-size) — apply it to .amiko-module wrappers
+        root.style.setProperty('--content-font-size', (fs + 1) + 'px');
+
+        // 4. Animations → toggle class on <html>
+        root.classList.toggle('no-animations', !prefs.animations_enabled);
+
+        // 5. Clock format → force immediate update
+        if (window.AmikoDragDrop && typeof window.AmikoDragDrop._updateClock === 'function') {
+            window.AmikoDragDrop._updateClock();
+        }
+    }
+
     applyTheme(themeId) {
         const link = document.getElementById('theme-stylesheet');
         if (link) {
@@ -597,4 +816,32 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.classList.toggle('no-crt', !data.crt_enabled);
         })
         .catch(() => { });
+
+    // Load UI prefs so drag-drop.js and explorer can read them from boot
+    fetch('/api/settings/ui')
+        .then(r => r.json())
+        .then(prefs => {
+            window.amikoUiPrefs = prefs;
+            // Apply immediately: font size, CSS vars, animations
+            const fs   = prefs.ui_font_size ?? 13;
+            const root = document.documentElement;
+            root.style.fontSize = fs + 'px';
+            root.style.setProperty('--font-size-base',     fs + 'px');
+            root.style.setProperty('--font-size-small',    (fs - 1) + 'px');
+            root.style.setProperty('--font-size-large',    (fs + 2) + 'px');
+            root.style.setProperty('--content-font-size',  (fs + 1) + 'px');
+            root.classList.toggle('no-animations', !prefs.animations_enabled);
+        })
+        .catch(() => {
+            window.amikoUiPrefs = {
+                explorer_max_file_mb: 10,
+                winbox_buttons: ['min','max','full','close'],
+                ui_font_size: 13,
+                clock_format: '24h',
+                animations_enabled: true,
+                explorer_show_hidden: false,
+                explorer_confirm_delete: true
+            };
+        });
+
 });

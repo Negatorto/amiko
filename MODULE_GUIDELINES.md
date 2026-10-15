@@ -1,343 +1,329 @@
-# AMIKO - Module Development Guidelines
+# AMIKO — Module Development Guide
 
-This guide explains how to create a new module to be inserted into the AMIKO Drag & Drop system.
-AMIKO uses a **Backend-Driven Plugin Architecture**, meaning each module lives in its own isolated folder within the `modules/` directory. The main AMIKO engine automatically discovers and loads them on startup.
+This guide explains how to create a new module for AMIKO.
 
----
+AMIKO uses a **plugin architecture**: each module lives in its own folder under `modules/`. The engine discovers and loads them automatically at startup — **no changes to the core are needed**.
 
-## Overview
-
-An AMIKO module is composed of a dedicated folder (e.g., `modules/my_module/`) containing up to 4 specific files:
-1. **`module.json`** (Required): Configuration metadata (Name, Icon, Status).
-2. **`template.html`** (Required): The UI layout injected into the grid.
-3. **`client.js`** (Required): The frontend JavaScript logic that controls the module.
-4. **`backend.py`** (Optional): A Flask Blueprint containing isolated API/backend routes for the module.
+When a user clicks a module icon in the sidebar dock, AMIKO opens a floating WinBox window and mounts your module's template inside it.
 
 ---
 
-## Step 1: Create the Module Directory & Metadata (`module.json`)
+## Anatomy of a Module
 
-Create a new folder inside `modules/` (e.g., `modules/my_module/`).
-Inside this folder, create a `module.json` file. This tells AMIKO how to populate the Sidebar.
+```
+modules/
+└── my_module/          ← folder name = module ID (use snake_case)
+    ├── module.json     ← required: metadata and icon
+    ├── template.html   ← required: UI layout
+    ├── client.js       ← required: frontend logic
+    └── backend.py      ← optional: server-side API routes
+```
+
+---
+
+## Step 1 — `module.json`
 
 ```json
 {
-    "name": "My New Module",
+    "name": "My Module",
     "icon": "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2L2 22h20L12 2z'/></svg>",
     "enabled": true,
     "index": 50,
-    "description": "A short sentence explaining exactly what the module does.",
-    "author": "Your Name",
-    "site": "https://link-to-your-site.com"
+    "description": "A short description of what this module does.",
+    "author": "Your Name"
 }
 ```
-*Note: The folder name (`my_module`) will be automatically used as the module's unique internal ID.*
 
-### Field Reference
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| `name` | Yes | Display name shown in the sidebar. |
-| `icon` | Yes | Emoji or SVG string. If SVG is provided, AMIKO converts it into a highly-performant sprite symbol (`#icon-[module_id]`) you can inject elsewhere. |
-| `enabled` | Yes | Set to `false` to hide the module from the sidebar without deleting it. |
-| `index` | Yes | Controls the display order in the sidebar. Lower values appear first (e.g., SSH Terminal uses `0`, Explorer uses `15`). |
-| `description` | No | Short description for internal reference. |
-| `author` | No | Module author name. |
-| `site` | No | URL to the author or project page. |
+| Field | Required | Notes |
+|-------|----------|-------|
+| `name` | ✅ | Display name shown in the sidebar tooltip |
+| `icon` | ✅ | SVG string. AMIKO converts it to a sprite symbol you can reference as `#icon-my_module` |
+| `enabled` | ✅ | Set to `false` to hide it from the dock without deleting it |
+| `index` | ✅ | Controls the vertical order in the sidebar. Lower = higher up |
+| `description` | — | Internal reference only |
+| `author` | — | Optional credit |
 
 ---
 
-## Step 2: Create the Visual Template (`template.html`)
+## Step 2 — `template.html`
 
-Create `template.html` inside your module's folder. 
-This HTML is automatically wrapped in a `<template>` tag by the server and cloned dynamically every time the user drags your module onto the grid.
+This is the UI that gets mounted inside the WinBox window body.
 
-⚠️ **GOLDEN RULE: DO NOT USE "IDs" (`id="..."`)**. 
-Because the user can drag multiple instances of "My New Module" into the grid, using `id="myButton"` will cause DOM conflicts. 
-**Always use classes** (e.g., `class="mod-my-button"`).
+> ⚠️ **Never use `id="..."` attributes.** Multiple instances of your module can be open at the same time. Always use classes and scope queries to `this.container`.
 
 ```html
-<!-- Main Container (data-module-type must match your folder name) -->
+<!-- Root container — data-module-type MUST match your folder name -->
 <div class="amiko-module" data-module-type="my_module">
-    
-    <!-- Module Header -->
+
+    <!-- Title bar (shown inside WinBox body, below WinBox's own header) -->
     <div class="module-header">
-        <!-- Use the generated SVG Sprite symbol based on your module's folder name -->
         <span class="module-title">
-            <svg class="module-icon-svg"><use href="#icon-my_module"></use></svg> My Module
+            <svg class="module-icon-svg"><use href="#icon-my_module"></use></svg>
+            My Module
         </span>
-        <div class="module-actions">
-            <button class="btn-expand" title="Expand/Collapse">⤢</button>
-            <button class="btn-close" title="Close Module">❌</button>
-        </div>
     </div>
-    
-    <!-- Module Body (Logic and UI) -->
+
+    <!-- Content area -->
     <div class="module-body">
-        <button class="mod-btn-action">Click Me!</button>
-        <div class="terminal-container">
-            <div class="terminal-body large mod-terminal">
+
+        <!-- Example: a form -->
+        <form class="form-grid amiko-mod-form">
+            <div class="form-group">
+                <label>Remote Path</label>
+                <input type="text" class="mod-my-path" placeholder="/var/www" required>
+            </div>
+            <div class="form-group">
+                <label>&nbsp;</label>
+                <button type="submit" class="mod-btn-submit">RUN</button>
+            </div>
+        </form>
+
+        <!-- Example: a log terminal -->
+        <div class="terminal-container" style="flex: 1;">
+            <div class="terminal-body large mod-my-terminal" style="height: 100%;">
                 <div class="log-entry log-dim">// Ready...</div>
             </div>
         </div>
-    </div>
 
+    </div>
 </div>
 ```
 
+### Useful CSS classes
+
+| Class | Purpose |
+|-------|---------|
+| `amiko-module` | Root wrapper — required |
+| `module-header` / `module-title` | Styled title bar inside the module body |
+| `module-body` | Flex column content area |
+| `form-grid amiko-mod-form` | Responsive form layout |
+| `form-group` | Label + input pair |
+| `mod-btn-submit` | Primary action button (glowing style) |
+| `terminal-container` | Wrapper for log output |
+| `terminal-body large` | Scrollable log area |
+| `log-entry log-dim` | Faded initial log line |
+
+### CSS variables (always use these, never hardcode colors)
+
+| Variable | Color |
+|----------|-------|
+| `var(--bg-primary)` | Main background |
+| `var(--bg-secondary)` | Panels / bars |
+| `var(--text-primary)` | Primary text (theme accent) |
+| `var(--text-secondary)` | Dimmer text |
+| `var(--text-dim)` | Very faint text / borders |
+| `var(--accent-warning)` | Yellow/amber warnings |
+| `var(--accent-danger)` | Red errors |
+| `var(--glow-primary)` | Box-shadow glow color |
+
 ---
 
-## Step 3: Ensure UI Consistency (CSS)
+## Step 3 — `client.js`
 
-AMIKO's interface supports multiple themes via CSS custom properties defined in `static/css/themes/`. To seamlessly integrate your module, use the built-in global CSS variables and classes:
-
-1. **Colors and Base Theme**:
-   - Use CSS variables instead of HEX codes!
-   - Main background: `var(--bg-primary)`
-   - Primary text (bright green): `var(--text-primary)`
-   - Secondary text (dim green): `var(--text-dim)`
-
-2. **Buttons and Forms**:
-   - Wrap inputs in `<div class="form-group">`.
-   - Use `<button type="submit" class="mod-btn-submit">` for main glowing actions.
-
-3. **"Hacker Terminal" Styling**:
-   - If your module outputs logs, put them in `<div class="terminal-body">`.
-   - Append rows using the `log-entry` class.
-   - You can color logs using modifiers: `log-success` (light green), `log-error` (red), `log-info` (cyan), or `log-dim` (faded green). *(Tip: Use the global `addLogEntry` JS function)*.
-
----
-
-## Step 4: Create the Frontend Logic (`client.js`)
-
-Create `client.js` in your module's folder. This script is automatically injected into the browser by the AMIKO loader.
-
-You must create a Class that accepts the **module's DOM container** in its constructor. This allows you to scope all your DOM queries to *your specific instance* using `this.container.querySelector(...)`.
+AMIKO automatically injects this script into the browser. You must define a class and register it with `AmikoModules.register`.
 
 ```javascript
 /*
- * AMIKO - My New Module Logic
+ * AMIKO - My Module
  */
 class MyModule {
     constructor(container) {
-        // 'container' is the DOM instance of your module cloned from template.html
-        this.container = container; 
-        
-        // 1. Find elements using querySelector
-        this.btn = this.container.querySelector('.mod-btn-action');
-        this.terminal = this.container.querySelector('.mod-terminal');
-        
-        // 2. Bind Events
-        if (this.btn) {
-            this.btn.addEventListener('click', this.doAction.bind(this));
+        // 'container' is the .amiko-module DOM element for THIS instance.
+        // Always scope your queries to this.container — never use document.querySelector.
+        this.container = container;
+
+        // Find your elements
+        this.form     = container.querySelector('.amiko-mod-form');
+        this.terminal = container.querySelector('.mod-my-terminal');
+
+        // Bind events
+        if (this.form) {
+            this.form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.run();
+            });
         }
 
-        // 3. Listen to Global Connection Events (Recommended)
-        this.globalConnectHandler = this.onGlobalConnect.bind(this);
-        this.globalDisconnectHandler = this.onGlobalDisconnect.bind(this);
-        window.addEventListener('amikoGlobalConnect', this.globalConnectHandler);
-        window.addEventListener('amikoGlobalDisconnect', this.globalDisconnectHandler);
-        
-        // Check if we are already connected upon instantiation
-        if (window.globalConnection && window.globalConnection.connected) {
+        // React to global SSH connection events
+        this._onConnect    = this.onGlobalConnect.bind(this);
+        this._onDisconnect = this.onGlobalDisconnect.bind(this);
+        window.addEventListener('amikoGlobalConnect',    this._onConnect);
+        window.addEventListener('amikoGlobalDisconnect', this._onDisconnect);
+
+        // If already connected when the window opens, initialise immediately
+        if (window.globalConnection?.connected) {
             this.onGlobalConnect();
         }
     }
 
-    doAction() {
-        if (!window.globalConnection || !window.globalConnection.connected) {
-            alert('Please connect via the Global Connection first!');
-            return;
-        }
-
-        // Access global credentials
-        const host = window.globalConnection.hostname;
-        
-        // Write a log (using AMIKO's global addLogEntry utility)
-        addLogEntry(this.terminal, `Action executed on ${host}...`, 'success');
-    }
-
     onGlobalConnect() {
-        addLogEntry(this.terminal, "Server connected! Features unlocked.", "info");
+        addLogEntry(this.terminal, 'Connected — ready.', 'success');
     }
 
     onGlobalDisconnect() {
-        addLogEntry(this.terminal, "Server disconnected.", "error");
+        addLogEntry(this.terminal, 'Disconnected.', 'error');
     }
 
-    // Crucial Method: Called by AMIKO when the user closes the module (Red X button)
+    async run() {
+        if (!window.globalConnection?.connected) {
+            window.AmikoAlert('Error', 'Connect to a server first.');
+            return;
+        }
+
+        const path = this.container.querySelector('.mod-my-path').value;
+
+        addLogEntry(this.terminal, `Running on ${window.globalConnection.hostname}…`, 'info');
+
+        try {
+            const res  = await fetch('/my-module/do-something', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({
+                    hostname: window.globalConnection.hostname,
+                    port:     window.globalConnection.port,
+                    username: window.globalConnection.username,
+                    password: window.globalConnection.password,
+                    path
+                })
+            });
+            const data = await res.json();
+
+            if (data.status === 'ok') {
+                addLogEntry(this.terminal, data.message, 'success');
+            } else {
+                addLogEntry(this.terminal, `Error: ${data.message}`, 'error');
+            }
+        } catch (err) {
+            addLogEntry(this.terminal, `Network error: ${err.message}`, 'error');
+        }
+    }
+
+    // Called automatically when the user closes the WinBox window.
+    // Clean up listeners and any open connections/intervals here.
     destroy() {
-        console.log("Module destroyed!");
-        
-        // Clean up listeners to prevent memory leaks!
-        window.removeEventListener('amikoGlobalConnect', this.globalConnectHandler);
-        window.removeEventListener('amikoGlobalDisconnect', this.globalDisconnectHandler);
-        
-        // Close event sources, intervals, or WebSockets here...
+        window.removeEventListener('amikoGlobalConnect',    this._onConnect);
+        window.removeEventListener('amikoGlobalDisconnect', this._onDisconnect);
     }
 }
 
-// REGISTER THE MODULE WITH THE CORE SYSTEM
-// The string 'my_module' MUST match your exact folder name!
+// The string MUST match your folder name exactly.
 AmikoModules.register('my_module', MyModule);
 ```
 
 ---
 
-## Step 5: (Optional) Python Backend API (`backend.py`)
+## Step 4 — `backend.py` (optional)
 
-If your module requires custom server-side execution (like searching files or querying a database), create a `backend.py` file in your module folder. 
-
-AMIKO will automatically detect it and try to register a Flask **Blueprint** named `blueprint`.
+Only needed if your module requires server-side logic (SSH commands, file access, etc.).
 
 ```python
 from flask import Blueprint, request, jsonify
+from utils.sftp_helper import connect_sftp
 
-# The blueprint object MUST be named 'blueprint' so the loader can find it.
-# The blueprint name (first argument) should ideally match your folder name.
+# The Blueprint object MUST be named 'blueprint'.
 blueprint = Blueprint('my_module', __name__)
 
-@blueprint.route('/my-module-api/do-something')
+@blueprint.route('/my-module/do-something', methods=['POST'])
 def do_something():
-    """ Custom API endpoint accessible at /my-module-api/do-something """
-    host = request.args.get('hostname')
-    return jsonify({"status": "success", "message": f"Processed {host} on backend."})
-```
+    data     = request.get_json() or {}
+    hostname = data.get('hostname')
+    port     = int(data.get('port', 22))
+    username = data.get('username')
+    password = data.get('password')
+    path     = data.get('path', '/')
 
-From your `client.js`, you can simply `fetch('/my-module-api/do-something?hostname=...')`.
+    if not all([hostname, username, password]):
+        return jsonify({'status': 'error', 'message': 'Missing credentials.'}), 400
+
+    try:
+        ssh, sftp = connect_sftp(hostname, port, username, password)
+        # ... do your work ...
+        sftp.close()
+        ssh.close()
+        return jsonify({'status': 'ok', 'message': f'Done on {hostname}:{path}'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+```
 
 ---
 
 ## Global Utilities Reference
 
-While inside your module's `client.js` class, you can safely use these globally exposed tools provided by AMIKO:
+These are available everywhere in your `client.js`.
 
-### Connection State
-
-- `window.globalConnection.connected` — (boolean) `true` if the main SSH/SFTP session is active.
-- `window.globalConnection.hostname` — Current server hostname.
-- `window.globalConnection.port` — Current server port.
-- `window.globalConnection.username` — Current SSH username.
-- `window.globalConnection.password` — Current SSH password.
-
-### Terminal Logging
-
-- `addLogEntry(terminalElement, message, type)` — Appends a styled log line to a terminal container. Supported types: `'log'`, `'info'`, `'success'`, `'error'`, `'match'`, `'dim'`.
-- `clearTerminal(terminalElement)` — Clears all log entries from the terminal container.
-- `scrollTerminalToBottom(terminalElement)` — Scrolls the terminal to the latest entry.
-- `formatTimestamp()` — Returns the current date/time as a localized string.
-
-### Dialog Windows
-
-AMIKO provides three global dialog functions that display styled WinBox popups instead of native browser dialogs. These are available from any module:
+### Connection state
 
 ```javascript
-// Error / Info / Success alert
-window.AmikoAlert(title, message, type);
-// type: 'error' (default), 'success', 'warning'
-
-// Confirmation dialog with Yes/No buttons
-window.AmikoConfirm(title, message, onConfirm);
-// onConfirm is called (no arguments) if the user clicks Yes.
-
-// Prompt dialog with text input
-window.AmikoPrompt(title, message, defaultValue, onConfirm);
-// onConfirm receives the entered string value.
+window.globalConnection.connected  // boolean
+window.globalConnection.hostname   // string
+window.globalConnection.port       // string
+window.globalConnection.username   // string
+window.globalConnection.password   // string
 ```
 
-Examples:
+### Log helpers
 
 ```javascript
-// Show error
-window.AmikoAlert('Error', 'Connection failed: timeout');
-
-// Ask for confirmation before a destructive action
-window.AmikoConfirm('Delete', 'Are you sure?', () => {
-    // User clicked Yes
-    this.performDelete();
-});
-
-// Ask user for a name
-window.AmikoPrompt('Rename', 'Enter new name:', 'default.txt', (newName) => {
-    this.renameFile(newName);
-});
+addLogEntry(terminalEl, 'Message', 'success'); // type: log | info | success | error | match | dim
+clearTerminal(terminalEl);
+scrollTerminalToBottom(terminalEl);
+formatTimestamp(); // returns localized date/time string
 ```
 
----
+### Dialog windows
 
-## Using WinBox Popups
+```javascript
+// Alert (type: 'error' | 'success' | 'warning')
+window.AmikoAlert('Title', 'Message', 'error');
 
-AMIKO includes [WinBox.js](https://nextapps-de.github.io/winbox/) for creating draggable, resizable popup windows. This is useful for editors, image viewers, detail panels, or any content that should float above the grid.
+// Confirmation — onConfirm() called if user clicks Yes
+window.AmikoConfirm('Title', 'Are you sure?', () => { /* confirmed */ });
 
-To create a popup that matches the AMIKO visual style, use the `wb-amiko` class:
+// Prompt — onConfirm(value) called with the entered string
+window.AmikoPrompt('Title', 'Enter a name:', 'default', (value) => { /* use value */ });
+```
+
+### Opening a sub-popup from inside a module
 
 ```javascript
 const popup = new WinBox({
     title: 'My Popup',
     class: ['wb-amiko'],
-    html: '<div style="padding: 20px;">Content here</div>',
-    width: 500,
+    html: '<div style="padding:20px;">Content</div>',
+    width:  500,
     height: 350,
     x: 'center',
     y: 'center',
-    top: 70,        // Prevents overlap with the AMIKO header
-    index: 9999,    // Ensures popup sits above grid modules
-    onclose: () => {
-        // Cleanup logic when the window is closed
-    }
-});
-```
-
-You can also mount a DOM element instead of raw HTML:
-
-```javascript
-const container = document.createElement('div');
-container.innerHTML = '...';
-
-new WinBox({
-    title: 'Mounted Content',
-    class: ['wb-amiko'],
-    mount: container,
-    // ... other options
+    top:    52,   // below AMIKO top bar
+    bottom: 36,   // above AMIKO bottom bar
+    left:   60,   // right of sidebar dock
+    index:  9999
 });
 ```
 
 ---
 
-## Real-Time Communication with SocketIO
+## SocketIO (real-time streaming)
 
-For modules that require real-time, bidirectional communication (live data streams, interactive sessions, etc.), AMIKO provides a SocketIO server via `flask-socketio`.
+Use this when your module needs live data pushed from the server (e.g. a log tail, live stats).
 
-The SocketIO client library is globally available as `io()`. Each module that needs its own WebSocket channel should create a dedicated connection with `forceNew: true` to avoid conflicts:
-
+**`client.js`**
 ```javascript
-// In your module's constructor
-this.socket = io({ forceNew: true });
+constructor(container) {
+    // ...
+    this.socket = io({ forceNew: true });
 
-// Listen for events from the server
-this.socket.on('my_module_output', (data) => {
-    console.log('Received:', data);
-});
+    this.socket.on('my_module_output', (data) => {
+        addLogEntry(this.terminal, data.line, 'log');
+    });
+}
 
-// Send events to the server
-this.socket.emit('my_module_action', {
-    hostname: window.globalConnection.hostname,
-    command: 'some_command'
-});
-```
+startStreaming() {
+    this.socket.emit('my_module_start', {
+        session_id: window.globalConnection.sessionId
+    });
+}
 
-On the backend side (`backend.py`), SocketIO events are registered in `app.py` since `flask-socketio` event handlers must be bound to the main `socketio` instance. If your module needs custom SocketIO events, they should be added to `app.py` following the existing pattern:
-
-```python
-@socketio.on('my_module_action')
-def handle_my_action(data):
-    # Process the request
-    emit('my_module_output', {'result': '...'}, to=request.sid)
-```
-
-Always disconnect in your module's `destroy()` method to prevent resource leaks:
-
-```javascript
 destroy() {
     if (this.socket) {
         this.socket.disconnect();
@@ -345,3 +331,118 @@ destroy() {
     }
 }
 ```
+
+**`app.py`** (SocketIO events must be registered in the main app file)
+```python
+@socketio.on('my_module_start')
+def handle_my_module_start(data):
+    # stream results back
+    emit('my_module_output', {'line': 'Hello from server'}, to=request.sid)
+```
+
+---
+
+## Step 5 — Module-specific Settings (Interface tab)
+
+If your module exposes user-configurable options (e.g. a size limit, a timeout, a display preference), you can add them to **Settings → Interface** in a way that is automatically hidden when the module is removed or disabled.
+
+### How it works
+
+The settings panel reads `GET /api/settings/ui`, which returns the list of currently active module IDs in the `active_modules` field. Any `<div>` in the Interface section marked with `data-requires-module="your_module_id"` is automatically hidden if `your_module_id` is not in that list.
+
+### Adding a setting group
+
+**1. Add the HTML block to `templates/index.html`** inside the `<div data-section="interface">` section:
+
+```html
+<!-- Your module's settings group -->
+<div class="iface-pref-group" data-requires-module="my_module">
+    <div class="iface-pref-header">
+        <span class="iface-pref-icon">🔧</span>
+        <div>
+            <div class="iface-pref-title">My Module — Option Name</div>
+            <div class="iface-pref-desc">A short description of what this setting does.</div>
+        </div>
+    </div>
+    <!-- Your controls here (slider, select, checkboxes…) -->
+    <div class="iface-slider-row">
+        <span class="iface-slider-label">Min</span>
+        <input type="range" id="myModuleOption" min="1" max="100" step="1" value="50" class="iface-slider">
+        <span class="iface-slider-label">Max</span>
+        <span class="iface-slider-value" id="myModuleOptionValue">50</span>
+    </div>
+</div>
+```
+
+> ⚠️ The `data-requires-module` value **must exactly match your module's folder name** (the same ID used in `module.json` and `AmikoModules.register()`).
+
+**2. Wire up the control in `static/js/settings.js`**, inside `initInterface()` (live feedback) and `loadInterface()` / `saveInterface()` (load & persist):
+
+```javascript
+// initInterface() — live feedback
+const slider = document.getElementById('myModuleOption');
+const sliderVal = document.getElementById('myModuleOptionValue');
+if (slider && sliderVal) {
+    slider.addEventListener('input', () => {
+        sliderVal.textContent = slider.value;
+    });
+}
+
+// _applyInterfaceFormValues(prefs) — populate from saved value
+const s = document.getElementById('myModuleOption');
+if (s) {
+    s.value = prefs.my_module_option ?? 50;
+    document.getElementById('myModuleOptionValue').textContent = s.value;
+}
+
+// saveInterface() — collect & send
+const my_module_option = parseInt(document.getElementById('myModuleOption')?.value ?? 50);
+// Add to the PUT /api/settings/ui payload:
+await this.api('PUT', '/api/settings/ui', { my_module_option, /* …other fields */ });
+```
+
+**3. Persist the value in `utils/settings_manager.py`**, inside `_UI_DEFAULTS` and `set_ui_prefs()`:
+
+```python
+_UI_DEFAULTS = {
+    # …existing defaults…
+    "my_module_option": 50,
+}
+
+def set_ui_prefs(self, prefs: dict):
+    # …existing validation…
+    if "my_module_option" in prefs:
+        current["my_module_option"] = max(1, min(100, int(prefs["my_module_option"])))
+    self._settings["ui_prefs"] = current
+    self._save()
+    return current
+```
+
+**4. Read it in your `backend.py`:**
+
+```python
+from core.config import settings as _amiko_settings
+
+def _get_my_option():
+    return _amiko_settings.get_ui_prefs().get('my_module_option', 50)
+```
+
+### Key rules
+
+| Rule | Reason |
+|------|--------|
+| Always add `data-requires-module="your_id"` | Group hides automatically when module is absent |
+| Use `iface-pref-group` / `iface-pref-header` CSS classes | Consistent look with the rest of the Interface tab |
+| Read the value at request time (not at startup) | Setting changes take effect immediately, no restart needed |
+
+---
+
+## Checklist before submitting a module
+
+- [ ] Folder name is `snake_case` and matches the ID used in `module.json`, `template.html`, and `AmikoModules.register()`
+- [ ] No `id="..."` in `template.html` — classes only
+- [ ] All DOM queries scoped to `this.container.querySelector(...)`
+- [ ] `destroy()` method removes all event listeners and closes sockets/intervals
+- [ ] Colors use CSS variables (`var(--text-primary)`, etc.) — no hardcoded hex values
+- [ ] `blueprint` object is exported in `backend.py` (if present)
+- [ ] Any Interface tab settings group uses `data-requires-module="your_id"` so it disappears when the module is removed

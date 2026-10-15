@@ -1,18 +1,57 @@
 <div class="amiko-module" data-module-type="notes">
     <div class="module-header">
         <span class="module-title"><svg class="module-icon-svg"><use href="#icon-notes"></use></svg> Notes</span>
-        <div class="module-actions">
-            <button class="btn-expand" title="Expand/Collapse">⤢</button>
-            <button class="btn-close" title="Close Module">❌</button>
-        </div>
     </div>
     <div class="mod-notes-bar">
         <span class="mod-notes-host">Not connected</span>
         <span class="mod-notes-status">⏳ Ready</span>
     </div>
-    <div class="module-body" style="padding: 0;">
-        <textarea class="mod-notes-textarea"
-            style="width: 100%; height: 100%; box-sizing: border-box; resize: none; background: transparent; color: var(--text-primary); border: none; outline: none; padding: 10px; font-family: monospace; font-size: 13px;"
-            placeholder="// Connect to a server to use notes..." disabled></textarea>
+    <div class="module-body mod-notes-body">
+
+        <!-- Sidebar: note list -->
+        <div class="mod-notes-sidebar">
+            <button class="mod-notes-new-btn" title="New note">+ New</button>
+            <div class="mod-notes-list"></div>
+        </div>
+
+        <!-- Editor panel -->
+        <div class="mod-notes-editor">
+            <div class="mod-notes-editor-empty">
+                <span>Select or create a note</span>
+            </div>
+            <div class="mod-notes-editor-active" style="display:none;">
+                <input type="text" class="mod-notes-title-input" placeholder="Note title…" maxlength="100">
+
+                <textarea class="mod-notes-textarea" placeholder="Write your note here…"></textarea>
+
+                <!-- Sharing controls -->
+                <div class="mod-notes-sharing">
+                    <div class="mod-notes-share-row">
+                        <label>Visibility</label>
+                        <select class="mod-notes-scope-select">
+                            <option value="private">🔒 Private</option>
+                            <option value="all">🌐 All servers</option>
+                            <option value="members">👥 Specific servers</option>
+                        </select>
+                    </div>
+                    <div class="mod-notes-members-row" style="display:none;">
+                        <label>Servers</label>
+                        <div class="mod-notes-members-list"></div>
+                    </div>
+                    <div class="mod-notes-share-row">
+                        <label>Group</label>
+                        <select class="mod-notes-group-select">
+                            <option value="local">📌 Local (this machine only)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mod-notes-actions">
+                    <button class="mod-notes-save-btn">💾 Save</button>
+                    <button class="mod-notes-delete-btn">🗑 Delete</button>
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>

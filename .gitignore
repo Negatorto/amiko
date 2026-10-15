@@ -1,10 +1,14 @@
 # Python cache
 __pycache__/
+*.pyc
 
-# Virtual Environment
+# Virtual environments
 venv/
 .venv/
 env/
 
-# Local data
+# Local sensitive data & settings
 data/
+
+# Internal plans / notes
+plane.md

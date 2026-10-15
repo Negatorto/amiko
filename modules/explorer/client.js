@@ -25,6 +25,16 @@ class ExplorerModule {
         this.originalContent = '';
         this.isModified = false;
 
+        // Context menu
+        this.contextMenu = null;
+        this._hideContextMenuBound = this._hideContextMenu.bind(this);
+
+        // Navigation abort controller (cancel in-flight requests on fast navigation)
+        this._navAbortController = null;
+
+        // Debounced line-numbers update (avoids full DOM reflow on every keystroke)
+        this._debouncedLineNumbers = this._debounce(this.updateLineNumbers.bind(this), 120);
+
         // Bind events
         if (this.btnGo) {
             this.btnGo.addEventListener('click', () => {
@@ -55,6 +65,15 @@ class ExplorerModule {
         this.globalDisconnectHandler = this.onGlobalDisconnect.bind(this);
         window.addEventListener('amikoGlobalConnect', this.globalConnectHandler);
         window.addEventListener('amikoGlobalDisconnect', this.globalDisconnectHandler);
+
+        // Context menu — right-click on listing container (bubbles from rows)
+        const listingContainer = container.querySelector('.mod-explorer-listing-container');
+        if (listingContainer) {
+            listingContainer.addEventListener('contextmenu', (e) => this._onTableContextMenu(e));
+        }
+        // Dismiss context menu on any click outside
+        document.addEventListener('click', this._hideContextMenuBound);
+        document.addEventListener('contextmenu', this._hideContextMenuBound, true); // capture phase so it fires before new menus
 
         // If already connected, navigate to root immediately
         if (window.globalConnection && window.globalConnection.connected) {
@@ -123,6 +142,13 @@ class ExplorerModule {
         path = path.replace(/\/+/g, '/') || '/';
         if (!path.startsWith('/')) path = '/' + path;
 
+        // Abort any in-flight navigation request
+        if (this._navAbortController) {
+            this._navAbortController.abort();
+        }
+        this._navAbortController = new AbortController();
+        const signal = this._navAbortController.signal;
+
         this.showLoading('⏳ Loading directory...');
 
         const payload = this.buildPayload({ path: path });
@@ -132,7 +158,8 @@ class ExplorerModule {
             const response = await fetch('/explorer/list-dir', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
+                signal
             });
             const data = await response.json();
 
@@ -145,6 +172,7 @@ class ExplorerModule {
                 this.renderError(data.message || 'Unknown error.');
             }
         } catch (err) {
+            if (err.name === 'AbortError') return; // Silently ignore cancelled requests
             this.renderError('Network error: ' + err.message);
         } finally {
             this.hideLoading();
@@ -264,7 +292,8 @@ class ExplorerModule {
             this.isModified = (textarea.value !== this.originalContent);
             const badge = popup.querySelector('.amiko-editor-modified-badge');
             if (badge) badge.style.display = this.isModified ? 'inline' : 'none';
-            this.updateLineNumbers(textarea.value);
+            // Debounced: avoids full DOM reflow on every single keystroke
+            this._debouncedLineNumbers(textarea.value);
         });
 
         textarea.addEventListener('keydown', (e) => {
@@ -468,6 +497,267 @@ class ExplorerModule {
     }
 
     // ──────────────────────────────────────
+    //  Context Menu
+    // ──────────────────────────────────────
+
+    _onTableContextMenu(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!window.globalConnection || !window.globalConnection.connected) return;
+
+        // Find if we right-clicked on a data row (has data-entry-name)
+        const row = e.target.closest('tr[data-entry-name]');
+        const entryName = row ? row.dataset.entryName : null;
+        const entryIsDir = row ? row.dataset.entryIsDir === 'true' : null;
+
+        const items = [];
+
+        if (entryName) {
+            items.push({
+                icon: entryIsDir ? '📂' : '✏️',
+                label: entryIsDir ? 'Open' : 'Open / Edit',
+                action: () => this._openEntry(entryName, entryIsDir)
+            });
+            items.push({ separator: true });
+        }
+
+        items.push(
+            {
+                icon: '📄',
+                label: 'New File',
+                action: () => this._createNewFile()
+            },
+            {
+                icon: '📁',
+                label: 'New Folder',
+                action: () => this._createNewFolder()
+            }
+        );
+
+        if (entryName) {
+            items.push({ separator: true });
+            items.push({
+                icon: '🗑️',
+                label: `Delete "${entryName}"`,
+                danger: true,
+                action: () => this._deleteEntry(entryName, entryIsDir)
+            });
+        }
+
+        this._showContextMenu(e.clientX, e.clientY, items);
+    }
+
+    _showContextMenu(x, y, items) {
+        // Remove any existing menu
+        this._hideContextMenu();
+
+        const menu = document.createElement('div');
+        menu.style.cssText = `
+            position: fixed;
+            z-index: 99999;
+            left: ${x}px;
+            top: ${y}px;
+            background: var(--bg-secondary, #1a1a2e);
+            border: 1px solid var(--border-color, rgba(255,255,255,0.15));
+            border-radius: 6px;
+            padding: 4px 0;
+            min-width: 180px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            font-family: monospace;
+            font-size: 0.85em;
+            animation: ctxMenuFadeIn 0.12s ease;
+        `;
+
+        // Inject animation keyframe once
+        if (!document.getElementById('amiko-ctx-menu-style')) {
+            const style = document.createElement('style');
+            style.id = 'amiko-ctx-menu-style';
+            style.textContent = `
+                @keyframes ctxMenuFadeIn {
+                    from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+                    to   { opacity: 1; transform: translateY(0)   scale(1);    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        items.forEach(item => {
+            if (item.separator) {
+                const sep = document.createElement('div');
+                sep.style.cssText = 'border-top: 1px solid var(--border-color, rgba(255,255,255,0.1)); margin: 4px 0;';
+                menu.appendChild(sep);
+                return;
+            }
+
+            const btn = document.createElement('div');
+            btn.style.cssText = `
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 8px 16px;
+                cursor: pointer;
+                color: ${item.danger ? 'var(--accent-danger, #ff4444)' : 'var(--text-primary, #0f0)'};
+                transition: background 0.1s;
+                user-select: none;
+            `;
+            btn.innerHTML = `<span>${item.icon}</span><span>${this.escapeHtml(item.label)}</span>`;
+            btn.addEventListener('mouseenter', () => {
+                btn.style.background = item.danger
+                    ? 'rgba(255, 68, 68, 0.12)'
+                    : 'var(--glow-primary, rgba(255,255,255,0.07))';
+            });
+            btn.addEventListener('mouseleave', () => { btn.style.background = 'transparent'; });
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                this._hideContextMenu();
+                item.action();
+            });
+            menu.appendChild(btn);
+        });
+
+        document.body.appendChild(menu);
+        this.contextMenu = menu;
+
+        // Clamp to viewport
+        const rect = menu.getBoundingClientRect();
+        if (rect.right > window.innerWidth)  menu.style.left = (x - rect.width)  + 'px';
+        if (rect.bottom > window.innerHeight) menu.style.top  = (y - rect.height) + 'px';
+    }
+
+    _hideContextMenu() {
+        if (this.contextMenu) {
+            this.contextMenu.remove();
+            this.contextMenu = null;
+        }
+    }
+
+    _openEntry(name, isDir) {
+        const fullPath = this.currentPath === '/'
+            ? '/' + name
+            : this.currentPath.replace(/\/$/, '') + '/' + name;
+
+        if (isDir) {
+            this.navigateTo(fullPath);
+        } else {
+            const ext = name.split('.').pop().toLowerCase();
+            const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico'];
+            if (imageExts.includes(ext)) {
+                this.openImage(fullPath, name);
+            } else {
+                this.openFile(fullPath);
+            }
+        }
+    }
+
+    async _createNewFile() {
+
+        if (!window.AmikoPrompt) return;
+        window.AmikoPrompt('New File', 'Enter file name:', 'newfile.txt', async (name) => {
+            name = name ? name.trim() : '';
+            if (!name) return;
+
+            const fullPath = this.currentPath === '/'
+                ? '/' + name
+                : this.currentPath.replace(/\/$/, '') + '/' + name;
+
+            const payload = this.buildPayload({ path: fullPath, content: '' });
+            if (!payload) return;
+
+            try {
+                const res  = await fetch('/explorer/create-file', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify(payload)
+                });
+                const data = await res.json();
+
+                if (data.status === 'ok') {
+                    // Refresh listing, then open the new file in the editor
+                    await this.navigateTo(this.currentPath);
+                    this.openFile(fullPath);
+                } else {
+                    if (window.AmikoAlert) window.AmikoAlert('Error', data.message || 'Cannot create file.', 'error');
+                }
+            } catch (err) {
+                if (window.AmikoAlert) window.AmikoAlert('Error', 'Network error: ' + err.message, 'error');
+            }
+        });
+    }
+
+    async _createNewFolder() {
+        if (!window.AmikoPrompt) return;
+        window.AmikoPrompt('New Folder', 'Enter folder name:', 'new_folder', async (name) => {
+            name = name ? name.trim() : '';
+            if (!name) return;
+
+            const fullPath = this.currentPath === '/'
+                ? '/' + name
+                : this.currentPath.replace(/\/$/, '') + '/' + name;
+
+            const payload = this.buildPayload({ path: fullPath });
+            if (!payload) return;
+
+            try {
+                const res  = await fetch('/explorer/create-dir', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify(payload)
+                });
+                const data = await res.json();
+
+                if (data.status === 'ok') {
+                    await this.navigateTo(this.currentPath);
+                } else {
+                    if (window.AmikoAlert) window.AmikoAlert('Error', data.message || 'Cannot create folder.', 'error');
+                }
+            } catch (err) {
+                if (window.AmikoAlert) window.AmikoAlert('Error', 'Network error: ' + err.message, 'error');
+            }
+        });
+    }
+
+    _deleteEntry(name, isDir) {
+        const fullPath = this.currentPath === '/'
+            ? '/' + name
+            : this.currentPath.replace(/\/$/, '') + '/' + name;
+
+        const label = isDir ? `folder "${name}" and all its contents` : `file "${name}"`;
+
+        const doDelete = async () => {
+            const payload = this.buildPayload({ path: fullPath, is_dir: isDir });
+            if (!payload) return;
+            try {
+                const res  = await fetch('/explorer/delete-entry', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    await this.navigateTo(this.currentPath);
+                } else {
+                    if (window.AmikoAlert) window.AmikoAlert('Error', data.message || 'Cannot delete.', 'error');
+                }
+            } catch (err) {
+                if (window.AmikoAlert) window.AmikoAlert('Error', 'Network error: ' + err.message, 'error');
+            }
+        };
+
+        // Check user pref: skip confirm dialog if disabled
+        const skipConfirm = window.amikoUiPrefs?.explorer_confirm_delete === false;
+        if (skipConfirm) {
+            doDelete();
+        } else {
+            window.AmikoConfirm(
+                'Delete',
+                `Are you sure you want to delete ${label}? This cannot be undone.`,
+                doDelete
+            );
+        }
+    }
+
+    // ──────────────────────────────────────
     //  File Listing Rendering
     // ──────────────────────────────────────
 
@@ -499,9 +789,13 @@ class ExplorerModule {
             return;
         }
 
-            entries.forEach(entry => {
+        entries.forEach(entry => {
             const row = document.createElement('tr');
             row.style.cssText = 'cursor: pointer; border-bottom: 1px solid var(--border-medium, rgba(255,255,255,0.05));';
+
+            // Data attributes used by the context menu to identify the entry
+            row.dataset.entryName  = entry.name;
+            row.dataset.entryIsDir = entry.is_dir;
 
             const icon = entry.is_dir ? '📁' : '📄';
 
@@ -587,6 +881,21 @@ class ExplorerModule {
             </tr>`;
     }
 
+    // ──────────────────────────────────────
+    //  Utilities
+    // ──────────────────────────────────────
+
+    /**
+     * Returns a debounced version of fn that fires after `delay` ms of inactivity.
+     */
+    _debounce(fn, delay) {
+        let timer = null;
+        return (...args) => {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn(...args), delay);
+        };
+    }
+
     escapeHtml(str) {
         if (typeof str !== 'string') return '';
         return str
@@ -599,6 +908,9 @@ class ExplorerModule {
 
     destroy() {
         this.closeEditor();
+        this._hideContextMenu();
+        document.removeEventListener('click', this._hideContextMenuBound);
+        document.removeEventListener('contextmenu', this._hideContextMenuBound, true);
         window.removeEventListener('amikoGlobalConnect', this.globalConnectHandler);
         window.removeEventListener('amikoGlobalDisconnect', this.globalDisconnectHandler);
     }

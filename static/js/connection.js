@@ -11,7 +11,9 @@ window.globalConnection = {
     username: null,
     password: null,
     sessionId: null,
-    statsStream: null
+    statsStream: null,
+    serverId: null,
+    groupId: null
 };
 
 // Initialize global connection handlers
@@ -56,10 +58,22 @@ document.addEventListener('DOMContentLoaded', function () {
                 window.globalConnection.password = password;
                 window.globalConnection.sessionId = result.session_id;
 
+                // Extract server/group IDs from the dropdown selection (if any)
+                const savedSelect = document.getElementById('saved_servers');
+                if (savedSelect && savedSelect.value && savedSelect.value !== 'new') {
+                    try {
+                        const sel = JSON.parse(savedSelect.value);
+                        window.globalConnection.serverId = sel.id || null;
+                        window.globalConnection.groupId  = sel.group_id || null;
+                    } catch { /* manual entry — no IDs */ }
+                }
+
                 updateConnectionUI(true, hostname, port, username);
 
                 sessionStorage.setItem('globalConnection', JSON.stringify({
-                    hostname, port, username, password
+                    hostname, port, username, password,
+                    serverId: window.globalConnection.serverId,
+                    groupId:  window.globalConnection.groupId
                 }));
 
                 startStatsMonitoring();
@@ -94,6 +108,9 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('global_port').value = conn.port;
         document.getElementById('global_username').value = conn.username;
         document.getElementById('global_password').value = conn.password;
+        // Restore server/group IDs if present
+        if (conn.serverId) window.globalConnection.serverId = conn.serverId;
+        if (conn.groupId)  window.globalConnection.groupId  = conn.groupId;
     }
 
     // Load saved servers into dropdown
@@ -114,7 +131,14 @@ function updateConnectionUI(connected, hostname, port, username) {
     if (connected) {
         connectionForm.classList.add('hidden');
         connectionStatus.classList.remove('hidden');
-        resourceMonitorHeader.classList.remove('hidden');
+        // Show the vitals block that matches the current display mode
+        const mode = localStorage.getItem('amiko_vitals_mode') || 'bars';
+        if (mode === 'text') {
+            const textEl = document.getElementById('resourceMonitorText');
+            if (textEl) textEl.classList.remove('hidden');
+        } else {
+            resourceMonitorHeader.classList.remove('hidden');
+        }
         globalConnectBtn.classList.add('hidden');
         globalDisconnectBtn.classList.remove('hidden');
 
@@ -125,6 +149,8 @@ function updateConnectionUI(connected, hostname, port, username) {
         connectionForm.classList.remove('hidden');
         connectionStatus.classList.add('hidden');
         resourceMonitorHeader.classList.add('hidden');
+        const textEl = document.getElementById('resourceMonitorText');
+        if (textEl) textEl.classList.add('hidden');
         globalConnectBtn.classList.remove('hidden');
         globalDisconnectBtn.classList.add('hidden');
         globalConnectBtn.disabled = false;
@@ -160,9 +186,18 @@ function startStatsMonitoring() {
 
 // Update stats display in header
 function updateStatsDisplay(stats) {
+    // Bar mode
     updateResourceBar('cpuBarFillHeader', 'cpuValueHeader', stats.cpu);
     updateResourceBar('ramBarFillHeader', 'ramValueHeader', stats.ram);
     updateResourceBar('diskBarFillHeader', 'diskValueHeader', stats.disk);
+    // Text mode
+    const fmt = (v) => v.toFixed(1) + '%';
+    const cpuT = document.getElementById('cpuValueText');
+    const ramT = document.getElementById('ramValueText');
+    const dskT = document.getElementById('diskValueText');
+    if (cpuT) cpuT.textContent = fmt(stats.cpu);
+    if (ramT) ramT.textContent = fmt(stats.ram);
+    if (dskT) dskT.textContent = fmt(stats.disk);
 }
 
 // Update single resource bar
@@ -202,6 +237,8 @@ function disconnectGlobal() {
     window.globalConnection.password = null;
     window.globalConnection.sessionId = null;
     window.globalConnection.statsStream = null;
+    window.globalConnection.serverId = null;
+    window.globalConnection.groupId = null;
 
     sessionStorage.removeItem('globalConnection');
 
