@@ -269,7 +269,12 @@ function loadSavedServers() {
             if (!select) return;
 
             // Clear existing options except defaults
-            select.innerHTML = '<option value="">-- Select --</option><option value="new">+ New Server</option>';
+            const isAdmin = window.amikoCurrentUser && window.amikoCurrentUser.role === 'admin';
+            select.innerHTML = isAdmin
+                ? '<option value="">-- Select --</option><option value="new">+ New Server</option>'
+                : '<option value="">-- Select Assigned Server --</option>';
+
+            if (!Array.isArray(servers)) return;
 
             // Group servers by category
             const groups = {};

@@ -39,10 +39,22 @@ class NotesModule {
         window.addEventListener('amikoGlobalConnect', this._onConnect);
         window.addEventListener('amikoGlobalDisconnect', this._onDisconnect);
 
-        // Button handlers
-        if (this.newBtn)    this.newBtn.addEventListener('click', () => this.createNote());
-        if (this.saveBtn)   this.saveBtn.addEventListener('click', () => this.saveNote());
-        if (this.deleteBtn) this.deleteBtn.addEventListener('click', () => this.deleteNote());
+        // Least Privilege: Read-Only UI for Viewer role
+        this.isReadOnly = window.amikoCurrentUser && window.amikoCurrentUser.role === 'viewer';
+        if (this.isReadOnly) {
+            if (this.newBtn) this.newBtn.style.display = 'none';
+            if (this.saveBtn) this.saveBtn.style.display = 'none';
+            if (this.deleteBtn) this.deleteBtn.style.display = 'none';
+            if (this.titleInput) this.titleInput.readOnly = true;
+            if (this.textarea) this.textarea.readOnly = true;
+            if (this.scopeSelect) this.scopeSelect.disabled = true;
+            if (this.groupSelect) this.groupSelect.disabled = true;
+        } else {
+            // Button handlers
+            if (this.newBtn)    this.newBtn.addEventListener('click', () => this.createNote());
+            if (this.saveBtn)   this.saveBtn.addEventListener('click', () => this.saveNote());
+            if (this.deleteBtn) this.deleteBtn.addEventListener('click', () => this.deleteNote());
+        }
 
         // Scope select → toggle members list
         if (this.scopeSelect) {

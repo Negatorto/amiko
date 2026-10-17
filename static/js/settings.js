@@ -6,7 +6,8 @@
 class SettingsPanel {
     constructor() {
         this.overlay = document.getElementById('settingsOverlay');
-        this.currentTab = 'groups';
+        const isAdmin = window.amikoCurrentUser && window.amikoCurrentUser.role === 'admin';
+        this.currentTab = isAdmin ? 'groups' : 'themes';
 
         this.initTabs();
         this.initCloseBtn();
@@ -49,6 +50,7 @@ class SettingsPanel {
 
         if (tabName === 'groups') this.loadGroups();
         else if (tabName === 'servers') this.loadServers();
+        else if (tabName === 'users') this.loadUsers();
         else if (tabName === 'themes') this.loadThemes();
         else if (tabName === 'interface') this.loadInterface();
     }
@@ -60,6 +62,205 @@ class SettingsPanel {
 
         this.overlay.addEventListener('click', (e) => {
             if (e.target === this.overlay) this.close();
+        });
+    }
+
+    // ========================
+    // USERS & RBAC TAB (Admin)
+    // ========================
+
+    async loadUsers() {
+        try {
+            const [users, groups] = await Promise.all([
+                this.api('GET', '/api/users'),
+                this.api('GET', '/api/groups')
+            ]);
+            this.renderUsers(users, groups);
+        } catch (e) {
+            console.error('[Settings] Error loading users:', e);
+        }
+    }
+
+    renderUsers(users, groups) {
+        const container = this.overlay.querySelector('.user-list');
+        const form = this.overlay.querySelector('.user-form');
+        if (!container || !form) return;
+
+        // Re-bind form cleanly
+        const newForm = form.cloneNode(true);
+        form.parentNode.replaceChild(newForm, form);
+
+        const roleSelect = newForm.querySelector('.user-role-select');
+        const groupsField = newForm.querySelector('.user-groups-field');
+        const checkboxesBox = newForm.querySelector('.user-groups-checkboxes');
+
+        if (checkboxesBox) {
+            if (groups.length === 0) {
+                checkboxesBox.innerHTML = '<span style="font-size:12px; color:var(--text-dim);">Create groups first in the Groups tab</span>';
+            } else {
+                checkboxesBox.innerHTML = groups.map(g => `
+                    <label class="user-group-chip">
+                        <input type="checkbox" value="${g.id}" checked>
+                        <span>${this.escapeHtml(g.icon)} ${this.escapeHtml(g.name)}</span>
+                    </label>
+                `).join('');
+            }
+        }
+
+        const updateGroupVisibility = () => {
+            if (groupsField && roleSelect) {
+                groupsField.style.opacity = roleSelect.value === 'admin' ? '0.4' : '1';
+                groupsField.style.pointerEvents = roleSelect.value === 'admin' ? 'none' : 'auto';
+            }
+        };
+        if (roleSelect) {
+            roleSelect.addEventListener('change', updateGroupVisibility);
+            updateGroupVisibility();
+        }
+
+        newForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = newForm.querySelector('.user-username-input').value.trim();
+            const password = newForm.querySelector('.user-password-input').value;
+            const role = roleSelect.value;
+            const allowed_groups = role === 'admin'
+                ? ['*']
+                : Array.from(newForm.querySelectorAll('.user-groups-checkboxes input:checked')).map(cb => cb.value);
+
+            if (!username || !password) return;
+            const res = await this.api('POST', '/api/users', { username, password, role, allowed_groups });
+            if (res.error) {
+                if (window.AmikoAlert) window.AmikoAlert('Error', res.error);
+                else alert(res.error);
+                return;
+            }
+            newForm.reset();
+            updateGroupVisibility();
+            this.loadUsers();
+        });
+
+        const groupMap = {};
+        groups.forEach(g => { groupMap[g.id] = `${g.icon} ${g.name}`; });
+        const currentUserId = window.amikoCurrentUser ? window.amikoCurrentUser.id : null;
+
+        container.innerHTML = users.map(u => {
+            const isSelf = u.id === currentUserId;
+            const isAdmin = u.role === 'admin';
+            const groupChips = isAdmin
+                ? `<span class="user-assigned-chip all-groups">🌐 All Server Groups</span>`
+                : (u.allowed_groups && u.allowed_groups.length > 0
+                    ? u.allowed_groups.map(gid => `<span class="user-assigned-chip">${this.escapeHtml(groupMap[gid] || gid)}</span>`).join('')
+                    : `<span class="user-assigned-chip no-groups">⚠️ No groups assigned</span>`);
+
+            return `
+                <div class="group-card user-card" data-user-id="${u.id}">
+                    <div class="group-card-info" style="flex-wrap:wrap; gap:8px;">
+                        <span class="group-card-name">👤 ${this.escapeHtml(u.username)} ${isSelf ? '<em style="font-size:11px; color:var(--text-dim);">(you)</em>' : ''}</span>
+                        <span class="topbar-role-badge role-${u.role}">${u.role.toUpperCase()}</span>
+                        <div class="user-assigned-groups">${groupChips}</div>
+                    </div>
+                    <div class="group-card-actions">
+                        <button class="btn-edit-user" title="Edit Role & Assigned Groups" data-id="${u.id}">🛡️</button>
+                        <button class="btn-pass-user" title="Reset Password" data-id="${u.id}" data-username="${this.escapeAttr(u.username)}">🔑</button>
+                        ${!isSelf ? `<button class="btn-delete-user" title="Delete User" data-id="${u.id}" data-username="${this.escapeAttr(u.username)}">🗑️</button>` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.querySelectorAll('.btn-pass-user').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const uid = btn.dataset.id;
+                const uname = btn.dataset.username;
+                const doReset = async (newPass) => {
+                    if (!newPass || !newPass.trim()) return;
+                    const r = await this.api('PUT', `/api/users/${uid}`, { password: newPass.trim() });
+                    if (r.error && window.AmikoAlert) window.AmikoAlert('Error', r.error);
+                    else if (window.AmikoAlert) window.AmikoAlert('Password Updated', `Password for ${uname} has been updated.`);
+                };
+                if (window.AmikoPrompt) {
+                    window.AmikoPrompt('Reset Password', `New password for ${uname}:`, '', doReset);
+                } else {
+                    const p = prompt(`New password for ${uname}:`);
+                    if (p) doReset(p);
+                }
+            });
+        });
+
+        container.querySelectorAll('.btn-edit-user').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const user = users.find(u => u.id === btn.dataset.id);
+                if (user) this.openEditUserInline(user, groups);
+            });
+        });
+
+        container.querySelectorAll('.btn-delete-user').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const uid = btn.dataset.id;
+                const uname = btn.dataset.username;
+                const doDel = async () => {
+                    const r = await this.api('DELETE', `/api/users/${uid}`);
+                    if (r.error && window.AmikoAlert) window.AmikoAlert('Error', r.error);
+                    this.loadUsers();
+                };
+                if (window.AmikoConfirm) {
+                    window.AmikoConfirm('Delete User', `Delete user "${uname}"?`, doDel);
+                } else if (confirm(`Delete user "${uname}"?`)) {
+                    doDel();
+                }
+            });
+        });
+    }
+
+    openEditUserInline(user, groups) {
+        const card = this.overlay.querySelector(`.user-card[data-user-id="${user.id}"]`);
+        if (!card) return;
+
+        const assignedSet = new Set(user.allowed_groups || []);
+        card.innerHTML = `
+            <div style="width:100%; display:flex; flex-direction:column; gap:10px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                    <strong>Edit ${this.escapeHtml(user.username)}</strong>
+                    <select class="inline-role-select" style="padding:5px 8px; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border); font-family:var(--font-mono);">
+                        <option value="operator" ${user.role === 'operator' ? 'selected' : ''}>Operator (R/W + SSH)</option>
+                        <option value="viewer" ${user.role === 'viewer' ? 'selected' : ''}>Viewer (Read-Only, No SSH)</option>
+                        <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin (Full Control)</option>
+                    </select>
+                </div>
+                <div class="inline-groups-box" style="display:flex; flex-wrap:wrap; gap:6px; ${user.role === 'admin' ? 'opacity:0.4; pointer-events:none;' : ''}">
+                    ${groups.map(g => `
+                        <label class="user-group-chip">
+                            <input type="checkbox" value="${g.id}" ${assignedSet.has(g.id) || assignedSet.has('*') ? 'checked' : ''}>
+                            <span>${this.escapeHtml(g.icon)} ${this.escapeHtml(g.name)}</span>
+                        </label>
+                    `).join('')}
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:8px;">
+                    <button type="button" class="btn-cancel-inline" style="padding:5px 10px;">Cancel</button>
+                    <button type="button" class="btn-save-inline" style="padding:5px 12px; background:var(--accent-highlight); color:#fff; border:none; cursor:pointer;">💾 Save</button>
+                </div>
+            </div>
+        `;
+
+        const roleSel = card.querySelector('.inline-role-select');
+        const gBox = card.querySelector('.inline-groups-box');
+        roleSel.addEventListener('change', () => {
+            gBox.style.opacity = roleSel.value === 'admin' ? '0.4' : '1';
+            gBox.style.pointerEvents = roleSel.value === 'admin' ? 'none' : 'auto';
+        });
+
+        card.querySelector('.btn-cancel-inline').addEventListener('click', () => this.loadUsers());
+        card.querySelector('.btn-save-inline').addEventListener('click', async () => {
+            const newRole = roleSel.value;
+            const newGroups = newRole === 'admin'
+                ? ['*']
+                : Array.from(card.querySelectorAll('.inline-groups-box input:checked')).map(cb => cb.value);
+            const r = await this.api('PUT', `/api/users/${user.id}`, { role: newRole, allowed_groups: newGroups });
+            if (r.error) {
+                if (window.AmikoAlert) window.AmikoAlert('Error', r.error);
+                else alert(r.error);
+            }
+            this.loadUsers();
         });
     }
 
@@ -795,6 +996,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const settingsBtn = document.getElementById('btnSettings');
     if (settingsBtn) {
         settingsBtn.addEventListener('click', () => settingsPanel.open());
+    }
+
+    const logoutBtn = document.getElementById('btnLogout');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                if (typeof disconnectGlobal === 'function') disconnectGlobal();
+                await fetch('/api/auth/logout', { method: 'POST' });
+            } catch (_) {}
+            sessionStorage.removeItem('globalConnection');
+            window.location.href = '/login';
+        });
     }
 
     // Load initial theme from server

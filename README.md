@@ -17,6 +17,7 @@ Built with Flask and WebSocket, it connects to remote servers via SSH/SFTP and p
 
 - **Modular architecture** — each tool is an isolated plugin with its own UI, logic, and optional backend routes. Modules are auto-discovered at startup.
 - **Desktop-style UI** — a fixed top bar (clock, vitals, connection), a vertical sidebar dock, and floating WinBox windows that stay within the desktop area.
+- **Role-Based Access Control (RBAC)** — multi-user authentication with three privilege levels (`admin`, `operator`, `viewer`) and per-group server isolation following the Principle of Least Privilege.
 - **Global connection** — connect once, and all modules share the same SSH/SFTP session. No need to re-enter credentials per tool.
 - **SSH connection pool** — the Explorer module reuses SSH transports across requests, eliminating per-request handshake overhead.
 - **Persistent layouts** — save and restore open-module configurations across sessions.
@@ -69,6 +70,8 @@ python3 app.py
 ```
 The server will start at `http://localhost:5423`.
 
+> **Default Login**: On first startup, AMIKO creates a default administrator account (`admin` / `admin`). You can change the password and manage `admin`, `operator`, and `viewer` accounts in **Settings → Users**.
+
 ## Project Structure
 
 ```
@@ -76,13 +79,15 @@ amiko/
 ├── app.py                  # Main server entry point
 ├── core/                   # Core application modules
 │   ├── __init__.py         # App factory and SocketIO init
+│   ├── auth.py             # Session authentication and 3-role RBAC engine
 │   ├── config.py           # Globals and settings
 │   ├── plugins.py          # Module auto-discovery logic
 │   ├── routes.py           # HTTP endpoints
 │   └── handlers.py         # WebSocket events
 ├── requirements.txt
 ├── templates/
-│   └── index.html          # Application shell
+│   ├── index.html          # Application shell
+│   └── login.html          # Authentication screen
 ├── static/
 │   ├── css/
 │   │   ├── main.css        # Core styles + top/bottom bar + WinBox theme
@@ -102,7 +107,7 @@ amiko/
 │   ├── keyword_search/
 │   ├── large_files/
 │   └── notes/
-├── data/                   # Persistent data (servers, layouts, notes)
+├── data/                   # Persistent data (encrypted settings vault, notes)
 ├── utils/                  # Shared utilities
 └── MODULE_GUIDELINES.md    # Guide for developing custom modules
 ```
@@ -126,24 +131,37 @@ See [MODULE_GUIDELINES.md](MODULE_GUIDELINES.md) for the complete development gu
 
 ## Status
 
-AMIKO is in early development (v0.3). The core architecture is functional, but the API surface and module contracts may change as the project evolves.
+AMIKO is in early development (v0.4). The core architecture is functional, but the API surface and module contracts may change as the project evolves.
 
 ## Roadmap to v1.0.0
 
-### Core
+### Core & Architecture
 - [x] Refactor `app.py` into dedicated modules (routes, handlers, config)
 - [x] Move SSH credentials from URL query parameters to request body
 - [x] Migrate inline styles from `index.html` to CSS
 - [x] Standardize all modules icons to SVG format
 - [x] Add favicon
+- [ ] Self-host all third-party frontend libraries (`static/lib/`) to remove external CDN dependencies
+- [ ] Module permission manifests (`module.json`) and plugin integrity verification
 
-### Security
-- [ ] Login screen with user authentication
-- [ ] Role-based access control (admin, operator)
+### Security & Access Control
+- [x] Login screen with session authentication
+- [x] Role-based access control (`admin`, `operator`, `viewer`) with per-group Least Privilege
+- [ ] Multi-Factor Authentication (TOTP / 2FA) and login rate-limiting / brute-force protection
+- [ ] Zero-password frontend (resolve server credentials strictly on the backend via opaque server IDs)
+- [ ] Asymmetric SSH key authentication (`Ed25519` / `RSA`) and strict `known_hosts` host-key verification
+- [ ] Master Passphrase / OS Keyring integration for the encrypted vault (decoupling the encryption key from local disk)
+- [ ] Deprecate plain-text FTP in favor of encrypted SFTP-only transport
+- [ ] Production transport hardening (strict CORS, CSRF tokens, Content Security Policy headers, local binding behind TLS reverse proxy)
+
+### Auditing, Operations & Resilience
+- [ ] Structured immutable audit logging for authentication, configuration changes, and remote operations
+- [ ] Interactive SSH terminal session recording and forensic playback
+- [ ] Automated encrypted backups and disaster recovery tooling
 
 ### UI/UX
 - [x] Desktop-environment UI (top bar, sidebar dock, floating WinBox windows)
-- [x] GNOME Vitals-style CPU/RAM/DISK monitor in top bar
+- [x] GNOME style CPU/RAM/DISK monitor in top bar
 - [x] Live clock in top bar
 - [x] Connection panel as topbar popover
 - [ ] Settings panel improvements (export/import config, server management)

@@ -261,6 +261,21 @@ window.globalConnection.username   // string
 window.globalConnection.password   // string
 ```
 
+### Current user & RBAC capabilities
+
+AMIKO exposes the authenticated user and their role capabilities globally via `window.amikoCurrentUser`:
+
+```javascript
+window.amikoCurrentUser.username                       // string
+window.amikoCurrentUser.role                           // 'admin' | 'operator' | 'viewer'
+window.amikoCurrentUser.allowed_groups                 // string[] (group IDs, or ['*'] for admin)
+window.amikoCurrentUser.capabilities.can_write         // boolean (false for 'viewer')
+window.amikoCurrentUser.capabilities.can_ssh           // boolean (false for 'viewer')
+window.amikoCurrentUser.capabilities.can_manage_settings // boolean (true only for 'admin')
+```
+
+If your module performs write or destructive operations (saving files, modifying data, deleting entries), always check `window.amikoCurrentUser?.capabilities?.can_write !== false` in `client.js` to hide or disable write controls for `viewer` users, and enforce the same check on your backend endpoints.
+
 ### Log helpers
 
 ```javascript
@@ -332,7 +347,7 @@ destroy() {
 }
 ```
 
-**`app.py`** (SocketIO events must be registered in the main app file)
+**`core/handlers.py`** (SocketIO events are registered in the core handlers module)
 ```python
 @socketio.on('my_module_start')
 def handle_my_module_start(data):
@@ -437,6 +452,39 @@ def _get_my_option():
 
 ---
 
+## Step 6 — Role-Based Access Control (RBAC) in Backend Routes
+
+All requests to AMIKO are automatically authenticated by `core/auth.py`. When writing custom endpoints in `backend.py`, keep the following Least Privilege rules in mind:
+
+1. **Restricting write endpoints to `admin` and `operator`:**
+   Use `@role_required('admin', 'operator')` on routes that modify remote files, execute commands, or alter persistent state so `viewer` users remain strictly read-only.
+2. **Validating server group access:**
+   Always verify that non-admin users have access to the target server's group via `settings.can_user_access_server`:
+
+```python
+from flask import Blueprint, request, jsonify
+from core.auth import get_current_user, role_required
+from core.config import settings
+
+blueprint = Blueprint('my_module', __name__)
+
+@blueprint.route('/my-module/write-action', methods=['POST'])
+@role_required('admin', 'operator')
+def write_action():
+    user = get_current_user()
+    data = request.get_json() or {}
+    hostname = data.get('hostname')
+    port = data.get('port', 22)
+
+    if not settings.can_user_access_server(user, hostname=hostname, port=port):
+        return jsonify({'status': 'error', 'message': 'Access to this server is not permitted for your assigned groups.'}), 403
+
+    # Proceed with operation...
+    return jsonify({'status': 'ok'})
+```
+
+---
+
 ## Checklist before submitting a module
 
 - [ ] Folder name is `snake_case` and matches the ID used in `module.json`, `template.html`, and `AmikoModules.register()`
@@ -445,4 +493,5 @@ def _get_my_option():
 - [ ] `destroy()` method removes all event listeners and closes sockets/intervals
 - [ ] Colors use CSS variables (`var(--text-primary)`, etc.) — no hardcoded hex values
 - [ ] `blueprint` object is exported in `backend.py` (if present)
+- [ ] Write/destructive actions check `window.amikoCurrentUser?.capabilities?.can_write` in `client.js` and enforce `@role_required` / `settings.can_user_access_server` in `backend.py`
 - [ ] Any Interface tab settings group uses `data-requires-module="your_id"` so it disappears when the module is removed

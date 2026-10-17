@@ -147,11 +147,26 @@
                 <span class="topbar-conn-status-dot" id="topbarStatusDot"></span>
             </button>
 
+            <!-- Logged-in User & Role Badge -->
+            <div class="topbar-user-pill" title="Logged in as {{ current_user.username }} ({{ current_user.role }})">
+                <span class="topbar-user-name">{{ current_user.username }}</span>
+                <span class="topbar-role-badge role-{{ current_user.role }}">{{ current_user.role | upper }}</span>
+            </div>
+
             <!-- Settings Button -->
             <button class="topbar-btn" id="btnSettings" title="Settings">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="3"></circle>
                     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+            </button>
+
+            <!-- Logout Button -->
+            <button class="topbar-btn" id="btnLogout" title="Logout">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
                 </svg>
             </button>
         </div>
@@ -167,24 +182,26 @@
                         <label for="saved_servers">SAVED</label>
                         <select id="saved_servers">
                             <option value="">-- Select --</option>
+                            {% if current_user.role == 'admin' %}
                             <option value="new">+ New Server</option>
+                            {% endif %}
                         </select>
                     </div>
                     <div class="form-field-inline">
                         <label for="global_hostname">HOST</label>
-                        <input type="text" id="global_hostname" placeholder="192.168.1.10" required>
+                        <input type="text" id="global_hostname" placeholder="192.168.1.10" required {% if current_user.role != 'admin' %}readonly{% endif %}>
                     </div>
                     <div class="form-field-inline">
                         <label for="global_port">PORT</label>
-                        <input type="number" id="global_port" value="22" required>
+                        <input type="number" id="global_port" value="22" required {% if current_user.role != 'admin' %}readonly{% endif %}>
                     </div>
                     <div class="form-field-inline">
                         <label for="global_username">USER</label>
-                        <input type="text" id="global_username" placeholder="root" required>
+                        <input type="text" id="global_username" placeholder="root" required {% if current_user.role != 'admin' %}readonly{% endif %}>
                     </div>
                     <div class="form-field-inline">
                         <label for="global_password">PASSWORD</label>
-                        <input type="password" id="global_password" placeholder="••••••" required>
+                        <input type="password" id="global_password" placeholder="••••••" required {% if current_user.role != 'admin' %}readonly{% endif %}>
                     </div>
                     <button type="submit" id="globalConnectBtn" class="btn-connect">CONNECT</button>
                 </div>
@@ -244,7 +261,7 @@
     <!-- BOTTOM BAR                                    -->
     <!-- ══════════════════════════════════════════════ -->
     <div class="bottom-bar" id="bottom-bar">
-        <span class="bottombar-brand">AMIKO v0.3</span>
+        <span class="bottombar-brand">AMIKO v0.4</span>
         <span class="bottombar-center"></span>
         <div class="bottombar-status">
             <span class="bottombar-dot" id="bottombarDot"></span>
@@ -278,6 +295,7 @@
             </div>
             <div class="settings-body">
                 <nav class="settings-tabs">
+                    {% if current_user.role == 'admin' %}
                     <button class="settings-tab-btn active" data-tab="groups" title="Groups">
                         <span class="settings-tab-icon">📁</span>
                         <span class="settings-tab-label">Groups</span>
@@ -286,7 +304,12 @@
                         <span class="settings-tab-icon">🖥️</span>
                         <span class="settings-tab-label">Servers</span>
                     </button>
-                    <button class="settings-tab-btn" data-tab="themes" title="Themes">
+                    <button class="settings-tab-btn" data-tab="users" title="Users & Access (RBAC)">
+                        <span class="settings-tab-icon">👥</span>
+                        <span class="settings-tab-label">Users</span>
+                    </button>
+                    {% endif %}
+                    <button class="settings-tab-btn {% if current_user.role != 'admin' %}active{% endif %}" data-tab="themes" title="Themes">
                         <span class="settings-tab-icon">🎨</span>
                         <span class="settings-tab-label">Themes</span>
                     </button>
@@ -296,8 +319,37 @@
                     </button>
                 </nav>
                 <div class="settings-content">
+                    <!-- Users & RBAC Section (Admin Only) -->
+                    <div class="settings-section" data-section="users">
+                        <h3 class="settings-section-title">Users & Least Privilege Access (RBAC)</h3>
+                        <form class="user-form">
+                            <div class="form-field">
+                                <label>Username</label>
+                                <input type="text" class="user-username-input" placeholder="e.g. operator1" required>
+                            </div>
+                            <div class="form-field">
+                                <label>Password</label>
+                                <input type="password" class="user-password-input" placeholder="••••••" required>
+                            </div>
+                            <div class="form-field">
+                                <label>Role</label>
+                                <select class="user-role-select">
+                                    <option value="operator">Operator (Assigned Groups • R/W + SSH)</option>
+                                    <option value="viewer">Viewer (Assigned Groups • Read-Only, No SSH)</option>
+                                    <option value="admin">Admin (Full Control • All Groups)</option>
+                                </select>
+                            </div>
+                            <div class="form-field user-groups-field">
+                                <label>Assigned Server Groups</label>
+                                <div class="user-groups-checkboxes"></div>
+                            </div>
+                            <button type="submit">+ ADD USER</button>
+                        </form>
+                        <div class="user-list"></div>
+                    </div>
+
                     <!-- Groups Section -->
-                    <div class="settings-section active" data-section="groups">
+                    <div class="settings-section {% if current_user.role == 'admin' %}active{% endif %}" data-section="groups">
                         <h3 class="settings-section-title">Group Management</h3>
                         <form class="group-form">
                             <div class="form-field">
@@ -349,7 +401,7 @@
                     </div>
 
                     <!-- Themes Section -->
-                    <div class="settings-section" data-section="themes">
+                    <div class="settings-section {% if current_user.role != 'admin' %}active{% endif %}" data-section="themes">
                         <h3 class="settings-section-title">Theme Management</h3>
                         <!-- CRT Toggle -->
                         <div class="crt-toggle-row">
@@ -526,6 +578,12 @@
     <script src="{{ url_for('static', filename='lib/socketio/socket.io.js') }}"></script>
     <script src="{{ url_for('static', filename='lib/xterm/xterm.js') }}"></script>
     <script src="{{ url_for('static', filename='lib/xterm/xterm-addon-fit.js') }}"></script>
+
+    <!-- Current Authenticated User Context (RBAC / Least Privilege) -->
+    <script id="amiko-user-data" type="application/json">{{ current_user | tojson }}</script>
+    <script>
+        window.amikoCurrentUser = JSON.parse(document.getElementById('amiko-user-data').textContent || 'null');
+    </script>
 
     <!-- App Scripts -->
     <script src="{{ url_for('static', filename='js/theme.js') }}"></script>

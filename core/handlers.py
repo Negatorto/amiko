@@ -3,7 +3,8 @@ from flask import request
 from flask_socketio import emit, disconnect
 
 from core import socketio
-from core.config import ssh_sessions
+from core.config import ssh_sessions, settings
+from core.auth import get_current_user
 
 def background_thread(sid, shell):
     """Reads from SSH shell and emits to socket"""
@@ -21,10 +22,26 @@ def background_thread(sid, shell):
 
 @socketio.on('connect_ssh')
 def handle_connect_ssh(data):
+    user = get_current_user()
+    if not user:
+        emit('ssh_status', {'status': 'error', 'message': 'Authentication required'})
+        disconnect()
+        return
+
+    if not user.get('capabilities', {}).get('can_ssh', False):
+        emit('ssh_status', {'status': 'error', 'message': 'Least Privilege: Viewer role is not allowed to open SSH terminal sessions.'})
+        disconnect()
+        return
+
     hostname = data.get('hostname')
     port = int(data.get('port', 22))
     username = data.get('username')
     password = data.get('password')
+
+    if not settings.can_user_access_server(user, hostname=hostname, port=port):
+        emit('ssh_status', {'status': 'error', 'message': f'Least Privilege: Access to {hostname} is not permitted for your assigned groups.'})
+        disconnect()
+        return
     
     try:
         # Create separate SSH client for terminal
@@ -36,7 +53,10 @@ def handle_connect_ssh(data):
         # Store session associated with Socket ID
         ssh_sessions[request.sid] = {
             'ssh': ssh,
-            'shell': shell
+            'shell': shell,
+            'user_id': user['id'],
+            'hostname': hostname,
+            'port': port
         }
         
         socketio.start_background_task(target=background_thread, sid=request.sid, shell=shell)

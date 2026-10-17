@@ -7,14 +7,19 @@ Uses Fernet (AES-128-CBC) symmetric encryption.
 import os
 import json
 import uuid
+from datetime import datetime, timezone
 from cryptography.fernet import Fernet
+from werkzeug.security import generate_password_hash, check_password_hash
 
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 SETTINGS_FILE = os.path.join(DATA_DIR, 'settings.json.enc')
 KEY_FILE = os.path.join(DATA_DIR, '.amiko_key')
 
+VALID_ROLES = ("admin", "operator", "viewer")
+
 DEFAULT_SETTINGS = {
+    "users": [],
     "groups": [],
     "servers": [],
     "active_theme": "amiko-theme",
@@ -40,6 +45,7 @@ class SettingsManager:
         os.makedirs(DATA_DIR, exist_ok=True)
         self._fernet = Fernet(self._load_or_create_key())
         self._settings = self._load()
+        self._ensure_default_admin()
 
     # --- Key Management ---
 
@@ -78,6 +84,187 @@ class SettingsManager:
         with open(SETTINGS_FILE, 'wb') as f:
             f.write(encrypted)
 
+    # --- Users & RBAC (Least Privilege) ---
+
+    def _ensure_default_admin(self):
+        if "users" not in self._settings or not self._settings["users"]:
+            default_admin = {
+                "id": str(uuid.uuid4()),
+                "username": "admin",
+                "password_hash": generate_password_hash("admin"),
+                "role": "admin",
+                "allowed_groups": ["*"],
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            self._settings["users"] = [default_admin]
+            self._save()
+
+    @staticmethod
+    def _sanitize_user(user):
+        if not user:
+            return None
+        return {k: v for k, v in user.items() if k != "password_hash"}
+
+    def get_users(self, safe=True):
+        users = self._settings.get("users", [])
+        if safe:
+            return [self._sanitize_user(u) for u in users]
+        return users
+
+    def get_user_by_id(self, user_id, safe=True):
+        for u in self._settings.get("users", []):
+            if u["id"] == user_id:
+                return self._sanitize_user(u) if safe else u
+        return None
+
+    def get_user_by_username(self, username, safe=True):
+        uname = (username or "").strip().lower()
+        for u in self._settings.get("users", []):
+            if u["username"].lower() == uname:
+                return self._sanitize_user(u) if safe else u
+        return None
+
+    def verify_user(self, username, password):
+        user = self.get_user_by_username(username, safe=False)
+        if not user or not password:
+            return None
+        if check_password_hash(user["password_hash"], password):
+            return self._sanitize_user(user)
+        return None
+
+    def create_user(self, username, password, role="operator", allowed_groups=None):
+        uname = (username or "").strip()
+        if not uname or not password:
+            raise ValueError("Username and password are required.")
+        if role not in VALID_ROLES:
+            raise ValueError(f"Invalid role '{role}'. Allowed: {', '.join(VALID_ROLES)}")
+        if self.get_user_by_username(uname):
+            raise ValueError(f"User '{uname}' already exists.")
+
+        groups = ["*"] if role == "admin" else list(allowed_groups or [])
+        user = {
+            "id": str(uuid.uuid4()),
+            "username": uname,
+            "password_hash": generate_password_hash(password),
+            "role": role,
+            "allowed_groups": groups,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        self._settings.setdefault("users", []).append(user)
+        self._save()
+        return self._sanitize_user(user)
+
+    def update_user(self, user_id, username=None, password=None, role=None, allowed_groups=None):
+        users = self._settings.get("users", [])
+        target = None
+        for u in users:
+            if u["id"] == user_id:
+                target = u
+                break
+        if not target:
+            return None
+
+        # Prevent demoting the last admin
+        if role is not None and role != "admin" and target.get("role") == "admin":
+            admin_count = sum(1 for u in users if u.get("role") == "admin")
+            if admin_count <= 1:
+                raise ValueError("Cannot change role of the last remaining admin user.")
+
+        if username is not None:
+            uname = username.strip()
+            if not uname:
+                raise ValueError("Username cannot be empty.")
+            existing = self.get_user_by_username(uname)
+            if existing and existing["id"] != user_id:
+                raise ValueError(f"Username '{uname}' is already taken.")
+            target["username"] = uname
+
+        if role is not None:
+            if role not in VALID_ROLES:
+                raise ValueError(f"Invalid role '{role}'.")
+            target["role"] = role
+
+        if password:
+            target["password_hash"] = generate_password_hash(password)
+
+        if target["role"] == "admin":
+            target["allowed_groups"] = ["*"]
+        elif allowed_groups is not None:
+            target["allowed_groups"] = list(allowed_groups)
+
+        self._save()
+        return self._sanitize_user(target)
+
+    def delete_user(self, user_id):
+        users = self._settings.get("users", [])
+        target = next((u for u in users if u["id"] == user_id), None)
+        if not target:
+            return False
+
+        if target.get("role") == "admin":
+            admin_count = sum(1 for u in users if u.get("role") == "admin")
+            if admin_count <= 1:
+                raise ValueError("Cannot delete the last remaining admin user.")
+
+        self._settings["users"] = [u for u in users if u["id"] != user_id]
+        self._save()
+        return True
+
+    def is_full_access_user(self, user):
+        if not user:
+            return False
+        return user.get("role") == "admin" or "*" in user.get("allowed_groups", [])
+
+    def get_groups_for_user(self, user):
+        all_groups = self.get_groups()
+        if self.is_full_access_user(user):
+            return all_groups
+        if not user:
+            return []
+        allowed = set(user.get("allowed_groups", []))
+        return [g for g in all_groups if g["id"] in allowed]
+
+    def get_servers_for_user(self, user, group_id=None):
+        if self.is_full_access_user(user):
+            return self.get_servers(group_id)
+        if not user:
+            return []
+        allowed = set(user.get("allowed_groups", []))
+        servers = [s for s in self._settings["servers"] if s.get("group_id") in allowed]
+        if group_id:
+            servers = [s for s in servers if s.get("group_id") == group_id]
+        return servers
+
+    def get_quick_list_for_user(self, user):
+        full_list = self.get_quick_list()
+        if self.is_full_access_user(user):
+            return full_list
+        if not user:
+            return []
+        allowed = set(user.get("allowed_groups", []))
+        return [s for s in full_list if s.get("group_id") in allowed]
+
+    def can_user_access_server(self, user, hostname=None, port=None, server_id=None, group_id=None):
+        if self.is_full_access_user(user):
+            return True
+        if not user:
+            return False
+        allowed_groups = set(user.get("allowed_groups", []))
+        if group_id and group_id in allowed_groups:
+            return True
+        allowed_servers = self.get_servers_for_user(user)
+        if server_id and any(s["id"] == server_id for s in allowed_servers):
+            return True
+        if hostname:
+            port_int = int(port) if port is not None else 22
+            for s in allowed_servers:
+                if s["hostname"] == hostname and int(s.get("port", 22)) == port_int:
+                    return True
+            for s in allowed_servers:
+                if s["hostname"] == hostname:
+                    return True
+        return False
+
     # --- Groups CRUD ---
 
     def get_groups(self):
@@ -115,6 +302,10 @@ class SettingsManager:
         self._settings["servers"] = [
             s for s in self._settings["servers"] if s.get("group_id") != group_id
         ]
+        # Also remove group_id from users' allowed_groups
+        for u in self._settings.get("users", []):
+            if "allowed_groups" in u and group_id in u["allowed_groups"]:
+                u["allowed_groups"] = [gid for gid in u["allowed_groups"] if gid != group_id]
         self._save()
         return True
 

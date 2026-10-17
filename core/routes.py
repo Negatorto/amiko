@@ -1,22 +1,67 @@
 import os
 import json
 import time
-from flask import render_template, request, Response, stream_with_context, jsonify, send_from_directory
+from flask import render_template, request, Response, stream_with_context, jsonify, send_from_directory, session, redirect, url_for
 
 from core import app, active_modules
 from core.config import settings, ssh_sessions, MODULES_DIR
+from core.auth import get_current_user, filter_modules_for_user, role_required
 from utils.sftp_helper import connect_sftp, execute_ssh_command, get_system_stats
+
+@app.route('/login', methods=['GET'])
+def login_page():
+    """Login screen"""
+    if get_current_user():
+        return redirect(url_for('index'))
+    return render_template('login.html')
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def api_auth_login():
+    data = request.get_json(silent=True) or {}
+    username = (data.get('username') or '').strip()
+    password = data.get('password') or ''
+    if not username or not password:
+        return jsonify({'success': False, 'error': 'Username and password are required.'}), 400
+
+    user = settings.verify_user(username, password)
+    if not user:
+        return jsonify({'success': False, 'error': 'Invalid username or password.'}), 401
+
+    session.clear()
+    session['user_id'] = user['id']
+    return jsonify({'success': True, 'user': get_current_user()})
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+def api_auth_logout():
+    session.clear()
+    return jsonify({'success': True})
+
+
+@app.route('/api/auth/me', methods=['GET'])
+def api_auth_me():
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Not authenticated'}), 401
+    return jsonify(user)
+
 
 @app.route('/static_modules/<module_name>/<path:filename>')
 def serve_module_static(module_name, filename):
     """Serve static files (like client.js) from module folders"""
+    user = get_current_user()
+    if user and module_name in user.get('capabilities', {}).get('blocked_modules', []):
+        return jsonify({'error': 'Module access denied for your role'}), 403
     module_dir = os.path.join(MODULES_DIR, module_name)
     return send_from_directory(module_dir, filename)
 
 @app.route('/')
 def index():
-    """Main page with 3 monitors"""
-    return render_template('index.html', modules=active_modules)
+    """Main page filtered by user's Least Privilege role"""
+    user = get_current_user()
+    user_modules = filter_modules_for_user(active_modules, user)
+    return render_template('index.html', modules=user_modules, current_user=user)
 
 @app.route('/ssh-connect', methods=['POST'])
 def ssh_connect():
@@ -193,14 +238,77 @@ def ssh_stats():
     return Response(stream_with_context(generate()), content_type='text/event-stream')
 
 
+# --- Users API (Admin Only - Least Privilege) ---
+
+@app.route('/api/users', methods=['GET'])
+@role_required('admin')
+def api_get_users():
+    return jsonify(settings.get_users(safe=True))
+
+
+@app.route('/api/users', methods=['POST'])
+@role_required('admin')
+def api_create_user():
+    data = request.get_json(silent=True) or {}
+    username = (data.get('username') or '').strip()
+    password = data.get('password') or ''
+    role = data.get('role', 'operator')
+    allowed_groups = data.get('allowed_groups', [])
+    try:
+        user = settings.create_user(
+            username=username,
+            password=password,
+            role=role,
+            allowed_groups=allowed_groups
+        )
+        return jsonify(user), 201
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/users/<user_id>', methods=['PUT'])
+@role_required('admin')
+def api_update_user(user_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        result = settings.update_user(
+            user_id,
+            username=data.get('username'),
+            password=data.get('password'),
+            role=data.get('role'),
+            allowed_groups=data.get('allowed_groups')
+        )
+        if result is None:
+            return jsonify({'error': 'User not found'}), 404
+        return jsonify(result)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/users/<user_id>', methods=['DELETE'])
+@role_required('admin')
+def api_delete_user(user_id):
+    current = get_current_user()
+    if current and current['id'] == user_id:
+        return jsonify({'error': 'Cannot delete your own active account.'}), 400
+    try:
+        ok = settings.delete_user(user_id)
+        if not ok:
+            return jsonify({'error': 'User not found'}), 404
+        return jsonify({'success': True})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+
 # --- Settings API ---
 
 @app.route('/api/groups', methods=['GET'])
 def api_get_groups():
-    return jsonify(settings.get_groups())
+    return jsonify(settings.get_groups_for_user(get_current_user()))
 
 
 @app.route('/api/groups', methods=['POST'])
+@role_required('admin')
 def api_create_group():
     data = request.get_json()
     name = data.get('name', '').strip()
@@ -212,6 +320,7 @@ def api_create_group():
 
 
 @app.route('/api/groups/<group_id>', methods=['PUT'])
+@role_required('admin')
 def api_update_group(group_id):
     data = request.get_json()
     result = settings.update_group(
@@ -226,6 +335,7 @@ def api_update_group(group_id):
 
 
 @app.route('/api/groups/<group_id>', methods=['DELETE'])
+@role_required('admin')
 def api_delete_group(group_id):
     settings.delete_group(group_id)
     return jsonify({'success': True})
@@ -234,10 +344,11 @@ def api_delete_group(group_id):
 @app.route('/api/servers', methods=['GET'])
 def api_get_servers():
     group_id = request.args.get('group_id')
-    return jsonify(settings.get_servers(group_id))
+    return jsonify(settings.get_servers_for_user(get_current_user(), group_id))
 
 
 @app.route('/api/servers', methods=['POST'])
+@role_required('admin')
 def api_create_server():
     data = request.get_json()
     required = ['group_id', 'name', 'hostname']
@@ -256,6 +367,7 @@ def api_create_server():
 
 
 @app.route('/api/servers/<server_id>', methods=['PUT'])
+@role_required('admin')
 def api_update_server(server_id):
     data = request.get_json()
     result = settings.update_server(server_id, **data)
@@ -265,6 +377,7 @@ def api_update_server(server_id):
 
 
 @app.route('/api/servers/<server_id>', methods=['DELETE'])
+@role_required('admin')
 def api_delete_server(server_id):
     settings.delete_server(server_id)
     return jsonify({'success': True})
@@ -272,7 +385,7 @@ def api_delete_server(server_id):
 
 @app.route('/api/servers/quick-list', methods=['GET'])
 def api_servers_quick_list():
-    return jsonify(settings.get_quick_list())
+    return jsonify(settings.get_quick_list_for_user(get_current_user()))
 
 
 @app.route('/api/themes', methods=['GET'])
@@ -330,9 +443,9 @@ def api_toggle_crt():
 @app.route('/api/settings/ui', methods=['GET'])
 def api_get_ui_prefs():
     prefs = settings.get_ui_prefs()
-    # Expose active module IDs so the frontend can conditionally render
-    # module-specific settings only when that module is installed & enabled.
-    prefs['active_modules'] = [m['id'] for m in active_modules]
+    user = get_current_user()
+    user_modules = filter_modules_for_user(active_modules, user)
+    prefs['active_modules'] = [m['id'] for m in user_modules]
     return jsonify(prefs)
 
 

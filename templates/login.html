@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMIKO - Authentication</title>
+    <link rel="stylesheet" id="theme-stylesheet" href="{{ url_for('static', filename='css/themes/amiko-theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <style>
+        body.login-body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+        }
+        .login-card {
+            width: 100%;
+            max-width: 390px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 32px 28px;
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.25), 0 0 20px var(--glow-primary);
+        }
+        .login-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+        .login-logo {
+            width: 100px;
+            height: auto;
+            filter: drop-shadow(0 0 6px var(--glow-primary));
+        }
+        .login-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 16px;
+        }
+        .login-field label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        .login-field input {
+            padding: 10px 12px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .login-field input:focus {
+            border-color: var(--accent-highlight);
+            box-shadow: 0 0 0 2px var(--glow-primary);
+        }
+        .login-error {
+            display: none;
+            background: rgba(192, 57, 43, 0.12);
+            border: 1px solid var(--accent-danger);
+            color: var(--accent-danger);
+            font-size: 12px;
+            padding: 9px 12px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+        }
+        .login-btn {
+            width: 100%;
+            padding: 11px;
+            background: var(--accent-highlight);
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+        .login-btn:hover {
+            opacity: 0.92;
+        }
+        .login-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .login-footer {
+            margin-top: 20px;
+            padding-top: 14px;
+            border-top: 1px solid var(--border-medium);
+            font-size: 11px;
+            color: var(--text-dim);
+            text-align: center;
+        }
+    </style>
+</head>
+<body class="login-body">
+    <div class="login-card">
+        <div class="login-header">
+            <img src="{{ url_for('static', filename='img/AMIKO.svg') }}" alt="AMIKO" class="login-logo">
+        </div>
+
+        <div class="login-error" id="loginError"></div>
+
+        <form id="loginForm">
+            <div class="login-field">
+                <label for="loginUsername">Username</label>
+                <input type="text" id="loginUsername" name="username" placeholder="admin" autocomplete="username" required autofocus>
+            </div>
+            <div class="login-field">
+                <label for="loginPassword">Password</label>
+                <input type="password" id="loginPassword" name="password" placeholder="••••••••" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="login-btn" id="loginSubmitBtn">SIGN IN</button>
+        </form>
+
+        <div class="login-footer">
+            Advanced Multi-function Interface Kit for Operations
+        </div>
+    </div>
+
+    <script>
+        // Apply active theme on login screen
+        fetch('/api/themes')
+            .then(r => r.json())
+            .then(data => {
+                if (data.active_theme) {
+                    const link = document.getElementById('theme-stylesheet');
+                    if (link) link.href = `/static/css/themes/${data.active_theme}.css`;
+                }
+                document.body.classList.toggle('no-crt', !data.crt_enabled);
+            })
+            .catch(() => {});
+
+        const form = document.getElementById('loginForm');
+        const errBox = document.getElementById('loginError');
+        const btn = document.getElementById('loginSubmitBtn');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            errBox.style.display = 'none';
+            btn.disabled = true;
+            btn.textContent = 'AUTHENTICATING...';
+
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const text = await res.text();
+                let data = {};
+                try {
+                    data = JSON.parse(text);
+                } catch (_) {
+                    throw new Error(`Server error (${res.status}).`);
+                }
+                if (res.ok && data.success) {
+                    sessionStorage.removeItem('globalConnection');
+                    window.location.href = '/';
+                } else {
+                    errBox.textContent = data.error || 'Authentication failed';
+                    errBox.style.display = 'block';
+                    btn.disabled = false;
+                    btn.textContent = 'SIGN IN';
+                }
+            } catch (err) {
+                errBox.textContent = err.message || 'Network error while signing in.';
+                errBox.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = 'SIGN IN';
+            }
+        });
+    </script>
+</body>
+</html>
+

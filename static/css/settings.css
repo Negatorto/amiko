@@ -1004,3 +1004,142 @@ html.no-animations *::after {
     transition: none !important;
     animation: none !important;
 }
+
+/* ========================
+   RBAC & LEAST PRIVILEGE UI
+   ======================== */
+
+.topbar-user-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+}
+
+.topbar-user-name {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.topbar-role-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+}
+
+.topbar-role-badge.role-admin {
+    background: rgba(192, 57, 43, 0.18);
+    border: 1px solid var(--accent-danger);
+    color: var(--accent-danger);
+}
+
+.topbar-role-badge.role-operator {
+    background: rgba(13, 115, 119, 0.18);
+    border: 1px solid var(--accent-highlight);
+    color: var(--accent-highlight);
+}
+
+.topbar-role-badge.role-viewer {
+    background: rgba(128, 128, 128, 0.15);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+}
+
+.user-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 20px;
+    padding: 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.user-form .form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.user-form input,
+.user-form select {
+    padding: 7px 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    border-radius: 4px;
+}
+
+.user-form button[type="submit"] {
+    padding: 8px 16px;
+    background: var(--accent-highlight);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.user-groups-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.user-group-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.user-assigned-groups {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.user-assigned-chip {
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-primary);
+}
+
+.user-assigned-chip.all-groups {
+    border-color: var(--accent-highlight);
+    color: var(--accent-highlight);
+}
+
+.user-assigned-chip.no-groups {
+    border-color: var(--accent-danger);
+    color: var(--accent-danger);
+}
+
+.user-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}

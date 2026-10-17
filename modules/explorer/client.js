@@ -241,21 +241,33 @@ class ExplorerModule {
         `;
         toolbar.appendChild(fileInfo);
 
-        // Right side: buttons
+        // Right side: buttons (or Read-Only badge for Viewer role)
+        const isReadOnly = window.amikoCurrentUser && window.amikoCurrentUser.role === 'viewer';
         const buttons = document.createElement('div');
         buttons.style.cssText = 'display: flex; gap: 8px; flex-shrink: 0; align-items: center;';
 
-        const btnSave = document.createElement('button');
-        btnSave.textContent = '💾 SAVE';
-        btnSave.style.cssText = `
-            background: rgba(0, 180, 80, 0.15); border: 1px solid rgba(0, 180, 80, 0.4);
-            color: #4cff88; cursor: pointer; padding: 5px 16px; border-radius: 4px;
-            font-family: monospace; font-size: 0.85em; transition: all 0.2s;
-        `;
-        btnSave.addEventListener('mouseenter', () => { btnSave.style.background = 'rgba(0, 180, 80, 0.3)'; });
-        btnSave.addEventListener('mouseleave', () => { btnSave.style.background = 'rgba(0, 180, 80, 0.15)'; });
-        btnSave.addEventListener('click', () => this.saveFile());
-        buttons.appendChild(btnSave);
+        if (isReadOnly) {
+            const roBadge = document.createElement('span');
+            roBadge.textContent = '🔒 READ-ONLY';
+            roBadge.style.cssText = `
+                background: rgba(240, 192, 64, 0.15); border: 1px solid rgba(240, 192, 64, 0.4);
+                color: var(--accent-warning, #f0c040); padding: 4px 12px; border-radius: 4px;
+                font-family: monospace; font-size: 0.8em;
+            `;
+            buttons.appendChild(roBadge);
+        } else {
+            const btnSave = document.createElement('button');
+            btnSave.textContent = '💾 SAVE';
+            btnSave.style.cssText = `
+                background: rgba(0, 180, 80, 0.15); border: 1px solid rgba(0, 180, 80, 0.4);
+                color: #4cff88; cursor: pointer; padding: 5px 16px; border-radius: 4px;
+                font-family: monospace; font-size: 0.85em; transition: all 0.2s;
+            `;
+            btnSave.addEventListener('mouseenter', () => { btnSave.style.background = 'rgba(0, 180, 80, 0.3)'; });
+            btnSave.addEventListener('mouseleave', () => { btnSave.style.background = 'rgba(0, 180, 80, 0.15)'; });
+            btnSave.addEventListener('click', () => this.saveFile());
+            buttons.appendChild(btnSave);
+        }
 
         toolbar.appendChild(buttons);
         popup.appendChild(toolbar);
@@ -277,6 +289,7 @@ class ExplorerModule {
         textarea.className = 'amiko-editor-textarea';
         textarea.value = content;
         textarea.spellcheck = false;
+        textarea.readOnly = isReadOnly;
         textarea.style.cssText = `
             flex: 1; resize: none; border: none; outline: none; background: transparent; color: var(--text-primary);
             padding: 12px 16px; margin: 0; font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
@@ -511,40 +524,44 @@ class ExplorerModule {
         const entryName = row ? row.dataset.entryName : null;
         const entryIsDir = row ? row.dataset.entryIsDir === 'true' : null;
 
+        const isReadOnly = window.amikoCurrentUser && window.amikoCurrentUser.role === 'viewer';
         const items = [];
 
         if (entryName) {
             items.push({
-                icon: entryIsDir ? '📂' : '✏️',
-                label: entryIsDir ? 'Open' : 'Open / Edit',
+                icon: entryIsDir ? '📂' : (isReadOnly ? '👁️' : '✏️'),
+                label: entryIsDir ? 'Open' : (isReadOnly ? 'View (Read-Only)' : 'Open / Edit'),
                 action: () => this._openEntry(entryName, entryIsDir)
             });
-            items.push({ separator: true });
+            if (!isReadOnly) items.push({ separator: true });
         }
 
-        items.push(
-            {
-                icon: '📄',
-                label: 'New File',
-                action: () => this._createNewFile()
-            },
-            {
-                icon: '📁',
-                label: 'New Folder',
-                action: () => this._createNewFolder()
+        if (!isReadOnly) {
+            items.push(
+                {
+                    icon: '📄',
+                    label: 'New File',
+                    action: () => this._createNewFile()
+                },
+                {
+                    icon: '📁',
+                    label: 'New Folder',
+                    action: () => this._createNewFolder()
+                }
+            );
+
+            if (entryName) {
+                items.push({ separator: true });
+                items.push({
+                    icon: '🗑️',
+                    label: `Delete "${entryName}"`,
+                    danger: true,
+                    action: () => this._deleteEntry(entryName, entryIsDir)
+                });
             }
-        );
-
-        if (entryName) {
-            items.push({ separator: true });
-            items.push({
-                icon: '🗑️',
-                label: `Delete "${entryName}"`,
-                danger: true,
-                action: () => this._deleteEntry(entryName, entryIsDir)
-            });
         }
 
+        if (items.length === 0) return;
         this._showContextMenu(e.clientX, e.clientY, items);
     }
 
