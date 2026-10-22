@@ -179,10 +179,11 @@ class MyModule {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body:    JSON.stringify({
-                    hostname: window.globalConnection.hostname,
-                    port:     window.globalConnection.port,
-                    username: window.globalConnection.username,
-                    password: window.globalConnection.password,
+                    session_id: window.globalConnection.sessionId,
+                    server_id:  window.globalConnection.serverId,
+                    hostname:   window.globalConnection.hostname,
+                    port:       window.globalConnection.port,
+                    username:   window.globalConnection.username,
                     path
                 })
             });
@@ -218,6 +219,8 @@ Only needed if your module requires server-side logic (SSH commands, file access
 
 ```python
 from flask import Blueprint, request, jsonify
+from core.auth import get_current_user
+from core.config import settings, ssh_sessions
 from utils.sftp_helper import connect_sftp
 
 # The Blueprint object MUST be named 'blueprint'.
@@ -225,15 +228,18 @@ blueprint = Blueprint('my_module', __name__)
 
 @blueprint.route('/my-module/do-something', methods=['POST'])
 def do_something():
-    data     = request.get_json() or {}
-    hostname = data.get('hostname')
-    port     = int(data.get('port', 22))
-    username = data.get('username')
-    password = data.get('password')
-    path     = data.get('path', '/')
+    data     = request.get_json(silent=True) or {}
+    resolved = settings.resolve_connection_credentials(
+        data, user=get_current_user(), ssh_sessions=ssh_sessions
+    )
+    if not resolved:
+        return jsonify({'status': 'error', 'message': 'Missing credentials or server not found in vault.'}), 400
 
-    if not all([hostname, username, password]):
-        return jsonify({'status': 'error', 'message': 'Missing credentials.'}), 400
+    hostname = resolved['hostname']
+    port     = resolved['port']
+    username = resolved['username']
+    password = resolved['password']
+    path     = data.get('path', '/')
 
     try:
         ssh, sftp = connect_sftp(hostname, port, username, password)
@@ -255,10 +261,12 @@ These are available everywhere in your `client.js`.
 
 ```javascript
 window.globalConnection.connected  // boolean
+window.globalConnection.sessionId  // string (backend SSH session ID)
+window.globalConnection.serverId   // string | null (opaque vault server ID)
+window.globalConnection.groupId    // string | null (server group ID)
 window.globalConnection.hostname   // string
-window.globalConnection.port       // string
+window.globalConnection.port       // string | number
 window.globalConnection.username   // string
-window.globalConnection.password   // string
 ```
 
 ### Current user & RBAC capabilities

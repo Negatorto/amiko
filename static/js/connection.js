@@ -34,51 +34,72 @@ document.addEventListener('DOMContentLoaded', function () {
         const username = document.getElementById('global_username').value;
         const password = document.getElementById('global_password').value;
 
+        // Extract server/group IDs from the dropdown selection (or Settings "Use" action)
+        let selectedServerId = window.globalConnection.serverId || null;
+        let selectedGroupId = window.globalConnection.groupId || null;
+        const savedSelect = document.getElementById('saved_servers');
+        if (savedSelect && savedSelect.value && savedSelect.value !== 'new') {
+            try {
+                const sel = JSON.parse(savedSelect.value);
+                selectedServerId = sel.id || selectedServerId;
+                selectedGroupId  = sel.group_id || selectedGroupId;
+            } catch { /* manual entry — no IDs */ }
+        }
+
         globalConnectBtn.disabled = true;
         globalConnectBtn.textContent = 'CONNECTING...';
 
         try {
-            // Test connection via SSH endpoint
+            // Test connection via SSH endpoint (resolves password server-side when server_id is used)
             const response = await fetch('/ssh-connect', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ hostname, port, username, password })
+                body: JSON.stringify({
+                    server_id: selectedServerId,
+                    group_id: selectedGroupId,
+                    hostname,
+                    port,
+                    username,
+                    password
+                })
             });
 
             const result = await response.json();
 
             if (result.success) {
-                // ... setup connection ... (logic unchanged)
                 window.globalConnection.connected = true;
-                window.globalConnection.hostname = hostname;
-                window.globalConnection.port = port;
-                window.globalConnection.username = username;
-                window.globalConnection.password = password;
+                window.globalConnection.hostname = result.hostname || hostname;
+                window.globalConnection.port = result.port || port;
+                window.globalConnection.username = result.username || username;
+                window.globalConnection.password = null;
                 window.globalConnection.sessionId = result.session_id;
+                window.globalConnection.serverId = result.server_id || selectedServerId;
+                window.globalConnection.groupId  = result.group_id || selectedGroupId;
 
-                // Extract server/group IDs from the dropdown selection (if any)
-                const savedSelect = document.getElementById('saved_servers');
-                if (savedSelect && savedSelect.value && savedSelect.value !== 'new') {
-                    try {
-                        const sel = JSON.parse(savedSelect.value);
-                        window.globalConnection.serverId = sel.id || null;
-                        window.globalConnection.groupId  = sel.group_id || null;
-                    } catch { /* manual entry — no IDs */ }
-                }
-
-                updateConnectionUI(true, hostname, port, username);
+                updateConnectionUI(true, window.globalConnection.hostname, window.globalConnection.port, window.globalConnection.username);
 
                 sessionStorage.setItem('globalConnection', JSON.stringify({
-                    hostname, port, username, password,
+                    hostname: window.globalConnection.hostname,
+                    port: window.globalConnection.port,
+                    username: window.globalConnection.username,
+                    sessionId: window.globalConnection.sessionId,
                     serverId: window.globalConnection.serverId,
                     groupId:  window.globalConnection.groupId
                 }));
 
                 startStatsMonitoring();
 
-                window.dispatchEvent(new CustomEvent('amikoGlobalConnect', { detail: { hostname, port, username } }));
+                window.dispatchEvent(new CustomEvent('amikoGlobalConnect', {
+                    detail: {
+                        hostname: window.globalConnection.hostname,
+                        port: window.globalConnection.port,
+                        username: window.globalConnection.username,
+                        serverId: window.globalConnection.serverId,
+                        sessionId: window.globalConnection.sessionId
+                    }
+                }));
                 console.log('Global connection established');
             } else {
                 if (window.AmikoAlert) window.AmikoAlert('Connection Error', result.error);
@@ -100,14 +121,21 @@ document.addEventListener('DOMContentLoaded', function () {
         disconnectGlobal();
     });
 
-    // Check if there's a saved connection
+    // Check if there's a saved connection metadata in sessionStorage
     const savedConnection = sessionStorage.getItem('globalConnection');
     if (savedConnection) {
         const conn = JSON.parse(savedConnection);
-        document.getElementById('global_hostname').value = conn.hostname;
-        document.getElementById('global_port').value = conn.port;
-        document.getElementById('global_username').value = conn.username;
-        document.getElementById('global_password').value = conn.password;
+        document.getElementById('global_hostname').value = conn.hostname || '';
+        document.getElementById('global_port').value = conn.port || 22;
+        document.getElementById('global_username').value = conn.username || '';
+        const pwInput = document.getElementById('global_password');
+        if (pwInput) {
+            pwInput.value = '';
+            if (conn.serverId) {
+                pwInput.placeholder = 'Stored in Vault 🔒';
+                pwInput.required = false;
+            }
+        }
         // Restore server/group IDs if present
         if (conn.serverId) window.globalConnection.serverId = conn.serverId;
         if (conn.groupId)  window.globalConnection.groupId  = conn.groupId;
@@ -247,14 +275,15 @@ function disconnectGlobal() {
     console.log('Global connection disconnected');
 }
 
-// Get global connection credentials
+// Get global connection credentials / session reference
 function getGlobalCredentials() {
     if (window.globalConnection.connected) {
         return {
+            session_id: window.globalConnection.sessionId,
+            server_id: window.globalConnection.serverId,
             hostname: window.globalConnection.hostname,
             port: window.globalConnection.port,
-            username: window.globalConnection.username,
-            password: window.globalConnection.password
+            username: window.globalConnection.username
         };
     }
     return null;
@@ -306,13 +335,36 @@ document.addEventListener('DOMContentLoaded', function () {
     if (select) {
         select.addEventListener('change', function () {
             const val = this.value;
-            if (!val || val === 'new') return;
+            const pwInput = document.getElementById('global_password');
+            const isAdmin = window.amikoCurrentUser && window.amikoCurrentUser.role === 'admin';
+            if (!val || val === 'new') {
+                window.globalConnection.serverId = null;
+                window.globalConnection.groupId = null;
+                if (val === 'new') {
+                    document.getElementById('global_hostname').value = '';
+                    document.getElementById('global_port').value = 22;
+                    document.getElementById('global_username').value = '';
+                }
+                if (pwInput) {
+                    pwInput.value = '';
+                    pwInput.placeholder = isAdmin ? '••••••' : 'Stored in Vault 🔒';
+                    pwInput.required = isAdmin;
+                }
+                return;
+            }
             try {
                 const server = JSON.parse(val);
+                window.globalConnection.serverId = server.id || null;
+                window.globalConnection.groupId = server.group_id || null;
                 document.getElementById('global_hostname').value = server.hostname || '';
                 document.getElementById('global_port').value = server.port || 22;
                 document.getElementById('global_username').value = server.username || '';
-                document.getElementById('global_password').value = server.password || '';
+                if (pwInput) {
+                    const hasStoredSecret = (server.has_password !== false) || Boolean(server.has_private_key);
+                    pwInput.value = '';
+                    pwInput.placeholder = hasStoredSecret ? 'Stored in Vault 🔒' : '••••••';
+                    pwInput.required = false;
+                }
             } catch (e) {
                 console.error('[Connection] Error parsing server data:', e);
             }

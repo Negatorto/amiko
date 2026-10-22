@@ -26,6 +26,7 @@ def search_large_files_endpoint():
     port = session_data['port']
     username = session_data['username']
     password = session_data['password']
+    private_key = session_data.get('private_key', '')
 
     def generate():
         client = None
@@ -41,7 +42,7 @@ def search_large_files_endpoint():
                     yield f"data: {json.dumps(event)}\n\n"
             else:
                 yield f"data: {json.dumps({'type': 'info', 'message': f'SFTP Connection to {hostname}:{port}...' })}\n\n"
-                client, sftp = connect_sftp(hostname, port, username, password)
+                client, sftp = connect_sftp(hostname, port, username, password, private_key=private_key)
                 yield f"data: {json.dumps({'type': 'success', 'message': 'SFTP Connection established!' })}\n\n"
 
                 for event in search_large_files(sftp, path, threshold_mb):

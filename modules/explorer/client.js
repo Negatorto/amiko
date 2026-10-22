@@ -117,10 +117,11 @@ class ExplorerModule {
             return null;
         }
         const payload = {
+            session_id: window.globalConnection.sessionId,
+            server_id: window.globalConnection.serverId,
             hostname: window.globalConnection.hostname,
             port: window.globalConnection.port,
-            username: window.globalConnection.username,
-            password: window.globalConnection.password
+            username: window.globalConnection.username
         };
 
         if (extraParams) {

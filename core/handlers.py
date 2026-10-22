@@ -5,6 +5,8 @@ from flask_socketio import emit, disconnect
 from core import socketio
 from core.config import ssh_sessions, settings
 from core.auth import get_current_user
+from core.audit import log_audit_event
+from utils.sftp_helper import connect_ssh_client
 
 def background_thread(sid, shell):
     """Reads from SSH shell and emits to socket"""
@@ -29,25 +31,51 @@ def handle_connect_ssh(data):
         return
 
     if not user.get('capabilities', {}).get('can_ssh', False):
+        log_audit_event(
+            event_type='SSH_TERMINAL_OPEN',
+            status='DENIED',
+            severity='WARNING',
+            details={'reason': 'Viewer role blocked from opening SSH terminal'}
+        )
         emit('ssh_status', {'status': 'error', 'message': 'Least Privilege: Viewer role is not allowed to open SSH terminal sessions.'})
         disconnect()
         return
 
-    hostname = data.get('hostname')
-    port = int(data.get('port', 22))
-    username = data.get('username')
-    password = data.get('password')
+    resolved = settings.resolve_connection_credentials(data, user=user, ssh_sessions=ssh_sessions)
+    if not resolved:
+        emit('ssh_status', {'status': 'error', 'message': 'Missing credentials or server not found in vault.'})
+        disconnect()
+        return
 
-    if not settings.can_user_access_server(user, hostname=hostname, port=port):
+    hostname = resolved['hostname']
+    port = resolved['port']
+    username = resolved['username']
+    password = resolved['password']
+    private_key = resolved.get('private_key', '')
+    server_id = resolved.get('server_id')
+
+    if not settings.can_user_access_server(user, hostname=hostname, port=port, server_id=server_id):
+        log_audit_event(
+            event_type='SSH_TERMINAL_OPEN',
+            status='DENIED',
+            severity='WARNING',
+            target={'server_id': server_id, 'hostname': hostname, 'port': port},
+            details={'reason': 'Server not in user allowed_groups'}
+        )
         emit('ssh_status', {'status': 'error', 'message': f'Least Privilege: Access to {hostname} is not permitted for your assigned groups.'})
         disconnect()
         return
     
     try:
-        # Create separate SSH client for terminal
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(hostname, port=port, username=username, password=password, timeout=10)
+        # Create hardened SSH client for terminal (verifies known_hosts & supports SSH keys)
+        ssh = connect_ssh_client(
+            hostname=hostname,
+            port=port,
+            username=username,
+            password=password,
+            private_key=private_key,
+            timeout=10
+        )
         shell = ssh.invoke_shell(term='xterm', width=80, height=24)
         
         # Store session associated with Socket ID
@@ -55,14 +83,29 @@ def handle_connect_ssh(data):
             'ssh': ssh,
             'shell': shell,
             'user_id': user['id'],
+            'server_id': server_id,
             'hostname': hostname,
             'port': port
         }
         
+        log_audit_event(
+            event_type='SSH_TERMINAL_OPEN',
+            status='SUCCESS',
+            severity='NOTICE',
+            target={'server_id': server_id, 'hostname': hostname, 'port': port},
+            details={'ssh_username': username, 'socket_sid': request.sid}
+        )
         socketio.start_background_task(target=background_thread, sid=request.sid, shell=shell)
         emit('ssh_status', {'status': 'connected', 'message': f'Connected to {hostname}'})
         
     except Exception as e:
+        log_audit_event(
+            event_type='SSH_TERMINAL_OPEN',
+            status='FAILURE',
+            severity='WARNING',
+            target={'server_id': server_id, 'hostname': hostname, 'port': port},
+            details={'ssh_username': username, 'error': str(e)}
+        )
         emit('ssh_status', {'status': 'error', 'message': str(e)})
         disconnect()
 

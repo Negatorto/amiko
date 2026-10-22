@@ -13,6 +13,7 @@ Implements the Principle of Least Privilege (NIS2 Art. 21.2.i):
 from functools import wraps
 from flask import session, request, redirect, url_for, jsonify, g
 from core.config import settings, ssh_sessions
+from core.audit import log_audit_event
 
 
 ROLE_CAPABILITIES = {
@@ -130,17 +131,31 @@ def init_auth(app):
         g.current_user = user
         role = user.get("role", "viewer")
 
-        # 3. Admin-only endpoints: User management & Server/Group mutations
-        if path.startswith("/api/users"):
+        # 3. Admin-only endpoints: User management, Audit Log & Server/Group mutations
+        if path.startswith(("/api/users", "/api/audit")):
             if role != "admin":
+                log_audit_event(
+                    event_type="RBAC_ACCESS_DENIED",
+                    status="DENIED",
+                    severity="WARNING",
+                    target={"resource": path},
+                    details={"reason": "Admin role required", "method": request.method}
+                )
                 return jsonify({
-                    "error": "Least Privilege: Only Administrators can manage users.",
+                    "error": "Least Privilege: Only Administrators can access this resource.",
                     "status": "error",
                     "success": False
                 }), 403
 
         if path.startswith(("/api/groups", "/api/servers")) and request.method in ("POST", "PUT", "DELETE"):
             if role != "admin":
+                log_audit_event(
+                    event_type="RBAC_ACCESS_DENIED",
+                    status="DENIED",
+                    severity="WARNING",
+                    target={"resource": path},
+                    details={"reason": "Admin role required for group/server mutation", "method": request.method}
+                )
                 return jsonify({
                     "error": "Least Privilege: Only Administrators can create, modify, or delete groups and servers.",
                     "status": "error",
@@ -150,6 +165,13 @@ def init_auth(app):
         # 4. Viewer Read-Only enforcement
         if role == "viewer":
             if path == "/ssh-command":
+                log_audit_event(
+                    event_type="RBAC_ACCESS_DENIED",
+                    status="DENIED",
+                    severity="WARNING",
+                    target={"resource": path},
+                    details={"reason": "Viewer role cannot execute SSH commands"}
+                )
                 return jsonify({
                     "error": "Least Privilege: Viewer role cannot execute SSH commands.",
                     "status": "error",
@@ -157,6 +179,13 @@ def init_auth(app):
                 }), 403
 
             if path in EXPLORER_WRITE_PATHS:
+                log_audit_event(
+                    event_type="RBAC_ACCESS_DENIED",
+                    status="DENIED",
+                    severity="WARNING",
+                    target={"resource": path},
+                    details={"reason": "Viewer role has read-only access in Explorer"}
+                )
                 return jsonify({
                     "error": "Least Privilege: Viewer role has read-only access in Explorer.",
                     "message": "Least Privilege: Viewer role has read-only access in Explorer.",
@@ -165,6 +194,13 @@ def init_auth(app):
                 }), 403
 
             if path.startswith("/notes") and request.method in ("POST", "PUT", "DELETE"):
+                log_audit_event(
+                    event_type="RBAC_ACCESS_DENIED",
+                    status="DENIED",
+                    severity="WARNING",
+                    target={"resource": path},
+                    details={"reason": "Viewer role has read-only access in Notes"}
+                )
                 return jsonify({
                     "error": "Least Privilege: Viewer role has read-only access in Notes.",
                     "status": "error",
@@ -176,18 +212,30 @@ def init_auth(app):
             # JSON POST endpoints carrying target server info
             if path in ("/ssh-connect", "/ssh-command") or path.startswith("/explorer/"):
                 data = request.get_json(silent=True) or {}
+                server_id = data.get("server_id")
                 hostname = data.get("hostname")
                 port = data.get("port", 22)
                 session_id = data.get("session_id")
 
-                if not hostname and session_id and session_id in ssh_sessions:
+                if not hostname and not server_id and session_id and session_id in ssh_sessions:
                     hostname = ssh_sessions[session_id].get("hostname")
                     port = ssh_sessions[session_id].get("port", 22)
+                    server_id = ssh_sessions[session_id].get("server_id")
 
-                if hostname and not settings.can_user_access_server(user, hostname=hostname, port=port):
+                if (hostname or server_id) and not settings.can_user_access_server(
+                    user, hostname=hostname, port=port, server_id=server_id
+                ):
+                    target_label = hostname or server_id
+                    log_audit_event(
+                        event_type="RBAC_ACCESS_DENIED",
+                        status="DENIED",
+                        severity="WARNING",
+                        target={"server_id": server_id, "hostname": hostname, "port": port, "resource": path},
+                        details={"reason": "Server not in user allowed_groups"}
+                    )
                     return jsonify({
-                        "error": f"Least Privilege: Access to server '{hostname}' is not permitted for your assigned groups.",
-                        "message": f"Least Privilege: Access to server '{hostname}' is not permitted for your assigned groups.",
+                        "error": f"Least Privilege: Access to server '{target_label}' is not permitted for your assigned groups.",
+                        "message": f"Least Privilege: Access to server '{target_label}' is not permitted for your assigned groups.",
                         "status": "error",
                         "success": False
                     }), 403

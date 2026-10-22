@@ -16,7 +16,9 @@ import hashlib
 import threading
 from io import BytesIO
 from utils.sftp_helper import connect_sftp, connect_ftp
-from core.config import settings as _amiko_settings
+from core.config import settings as _amiko_settings, ssh_sessions as _amiko_ssh_sessions
+from core.auth import get_current_user
+from core.audit import log_audit_event
 
 blueprint = Blueprint('explorer', __name__)
 
@@ -125,15 +127,17 @@ def _invalidate_pool_entry(hostname: str, port: int, username: str, password: st
 # ─── Helpers ──────────────────────────────────────────────────────────────
 
 def _get_connection_params():
-    """Extract and validate connection parameters from request."""
-    data = request.get_json() or {}
-    hostname = data.get('hostname')
-    port = int(data.get('port', 22))
-    username = data.get('username')
-    password = data.get('password')
-    if not all([hostname, username, password]):
+    """Extract and resolve connection parameters from request/session/vault."""
+    data = request.get_json(silent=True) or {}
+    resolved = _amiko_settings.resolve_connection_credentials(
+        data,
+        user=get_current_user(),
+        ssh_sessions=_amiko_ssh_sessions
+    )
+    if not resolved:
         return None
-    return hostname, port, username, password, data
+    secret = resolved.get('private_key') or resolved.get('password', '')
+    return resolved['hostname'], resolved['port'], resolved['username'], secret, data
 
 
 def _format_size(size_bytes):
@@ -331,19 +335,16 @@ def read_file():
 @blueprint.route('/explorer/save-file', methods=['POST'])
 def save_file():
     """Save text content to a remote file."""
-    data = request.get_json()
-    if not data:
-        return jsonify({"status": "error", "message": "No data provided."}), 400
+    params = _get_connection_params()
+    if not params:
+        return jsonify({"status": "error", "message": "Missing connection parameters."}), 400
 
-    hostname = data.get('hostname')
-    port = int(data.get('port', 22))
-    username = data.get('username')
-    password = data.get('password')
+    hostname, port, username, password, data = params
     path = data.get('path', '')
     content = data.get('content', '')
 
-    if not all([hostname, username, password, path]):
-        return jsonify({"status": "error", "message": "Missing parameters."}), 400
+    if not path:
+        return jsonify({"status": "error", "message": "Missing file path."}), 400
 
     ftp_client = None
 
@@ -365,6 +366,13 @@ def save_file():
             finally:
                 _release_sftp(sftp, from_pool)
 
+        log_audit_event(
+            event_type='EXPLORER_SAVE_FILE',
+            status='SUCCESS',
+            severity='NOTICE',
+            target={'server_id': data.get('server_id'), 'hostname': hostname, 'port': port, 'resource': path},
+            details={'size_bytes': len(raw)}
+        )
         return jsonify({
             "status": "ok",
             "message": "File saved successfully.",
@@ -425,6 +433,12 @@ def create_file():
             finally:
                 _release_sftp(sftp, from_pool)
 
+        log_audit_event(
+            event_type='EXPLORER_CREATE_FILE',
+            status='SUCCESS',
+            severity='NOTICE',
+            target={'server_id': data.get('server_id'), 'hostname': hostname, 'port': port, 'resource': path}
+        )
         return jsonify({"status": "ok", "message": f"File created: {path}", "path": path})
 
     except ConnectionRefusedError:
@@ -468,6 +482,12 @@ def create_dir():
             finally:
                 _release_sftp(sftp, from_pool)
 
+        log_audit_event(
+            event_type='EXPLORER_CREATE_DIR',
+            status='SUCCESS',
+            severity='NOTICE',
+            target={'server_id': data.get('server_id'), 'hostname': hostname, 'port': port, 'resource': path}
+        )
         return jsonify({"status": "ok", "message": f"Directory created: {path}", "path": path})
 
     except ConnectionRefusedError:
@@ -528,6 +548,13 @@ def delete_entry():
             finally:
                 _release_sftp(sftp, from_pool)
 
+        log_audit_event(
+            event_type='EXPLORER_DELETE_ENTRY',
+            status='SUCCESS',
+            severity='WARNING',
+            target={'server_id': data.get('server_id'), 'hostname': hostname, 'port': port, 'resource': path},
+            details={'is_dir': is_dir}
+        )
         return jsonify({"status": "ok", "message": f"Deleted: {path}"})
 
     except ConnectionRefusedError:

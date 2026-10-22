@@ -6,7 +6,21 @@ from flask import render_template, request, Response, stream_with_context, jsoni
 from core import app, active_modules
 from core.config import settings, ssh_sessions, MODULES_DIR
 from core.auth import get_current_user, filter_modules_for_user, role_required
-from utils.sftp_helper import connect_sftp, execute_ssh_command, get_system_stats
+from core.audit import (
+    log_audit_event,
+    get_audit_events,
+    verify_audit_chain,
+    check_login_lockout,
+    record_login_attempt,
+    AUDIT_LOG_FILE
+)
+from utils.sftp_helper import (
+    connect_sftp,
+    execute_ssh_command,
+    get_system_stats,
+    get_known_hosts_list,
+    remove_known_host
+)
 
 @app.route('/login', methods=['GET'])
 def login_page():
@@ -24,17 +38,74 @@ def api_auth_login():
     if not username or not password:
         return jsonify({'success': False, 'error': 'Username and password are required.'}), 400
 
+    source_ip = (
+        request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
+        or request.remote_addr
+        or 'unknown'
+    )
+
+    locked, rem_seconds = check_login_lockout(username, source_ip)
+    if locked:
+        log_audit_event(
+            event_type='AUTH_LOCKOUT',
+            status='DENIED',
+            severity='ALERT',
+            actor={'username': username, 'source_ip': source_ip, 'role': 'none'},
+            details={'reason': 'Account/IP locked due to repeated failed attempts', 'remaining_seconds': rem_seconds}
+        )
+        return jsonify({
+            'success': False,
+            'error': f'Too many failed attempts. Try again in {rem_seconds}s.'
+        }), 429
+
     user = settings.verify_user(username, password)
     if not user:
+        just_locked, lock_rem, fail_count = record_login_attempt(username, source_ip, success=False)
+        if just_locked:
+            log_audit_event(
+                event_type='AUTH_LOCKOUT',
+                status='DENIED',
+                severity='ALERT',
+                actor={'username': username, 'source_ip': source_ip, 'role': 'none'},
+                details={'failed_attempts': fail_count, 'lockout_seconds': lock_rem}
+            )
+            return jsonify({
+                'success': False,
+                'error': f'Too many failed login attempts ({fail_count}). Locked for {lock_rem}s.'
+            }), 429
+
+        log_audit_event(
+            event_type='AUTH_LOGIN_FAILED',
+            status='FAILURE',
+            severity='WARNING',
+            actor={'username': username, 'source_ip': source_ip, 'role': 'none'},
+            details={'failed_attempts': fail_count}
+        )
         return jsonify({'success': False, 'error': 'Invalid username or password.'}), 401
 
+    record_login_attempt(username, source_ip, success=True)
     session.clear()
     session['user_id'] = user['id']
-    return jsonify({'success': True, 'user': get_current_user()})
+    current = get_current_user()
+    log_audit_event(
+        event_type='AUTH_LOGIN_SUCCESS',
+        status='SUCCESS',
+        severity='INFO',
+        actor={'user_id': user['id'], 'username': user['username'], 'role': user['role'], 'source_ip': source_ip}
+    )
+    return jsonify({'success': True, 'user': current})
 
 
 @app.route('/api/auth/logout', methods=['POST'])
 def api_auth_logout():
+    user = get_current_user()
+    if user:
+        log_audit_event(
+            event_type='AUTH_LOGOUT',
+            status='SUCCESS',
+            severity='INFO',
+            actor={'user_id': user['id'], 'username': user['username'], 'role': user['role']}
+        )
     session.clear()
     return jsonify({'success': True})
 
@@ -66,20 +137,26 @@ def index():
 @app.route('/ssh-connect', methods=['POST'])
 def ssh_connect():
     """
-    Monitor 1: Establish SSH connection
+    Monitor 1: Establish SSH connection (resolves credentials server-side from vault when server_id is used)
     """
-    data = request.get_json()
-    hostname = data.get('hostname')
-    port = int(data.get('port', 22))
-    username = data.get('username')
-    password = data.get('password')
+    data = request.get_json(silent=True) or {}
+    user = get_current_user()
+    resolved = settings.resolve_connection_credentials(data, user=user, ssh_sessions=ssh_sessions)
 
-    if not all([hostname, username, password]):
-        return jsonify({'success': False, 'error': 'Missing credentials'})
+    if not resolved:
+        return jsonify({'success': False, 'error': 'Missing credentials or server not found in vault'})
+
+    hostname = resolved['hostname']
+    port = resolved['port']
+    username = resolved['username']
+    password = resolved['password']
+    private_key = resolved.get('private_key', '')
+    server_id = resolved.get('server_id')
+    group_id = resolved.get('group_id')
 
     try:
-        # Connect using utility function
-        ssh, _ = connect_sftp(hostname, port, username, password)
+        # Connect using hardened SFTP/SSH utility
+        ssh, _ = connect_sftp(hostname, port, username, password, private_key=private_key)
         
         # Determine initial CWD
         stdin, stdout, stderr = ssh.exec_command("pwd")
@@ -88,19 +165,45 @@ def ssh_connect():
         # Generate session ID
         session_id = f"{hostname}_{username}_{int(time.time())}"
         
-        # Store SSH connection
+        # Store SSH connection server-side
         ssh_sessions[session_id] = {
             'ssh': ssh,
             'hostname': hostname,
             'port': port,
             'username': username,
             'password': password,
+            'private_key': private_key,
+            'server_id': server_id,
+            'group_id': group_id,
+            'user_id': user['id'] if user else None,
             'cwd': initial_cwd
         }
         
-        return jsonify({'success': True, 'session_id': session_id})
+        log_audit_event(
+            event_type='SSH_CONNECT',
+            status='SUCCESS',
+            severity='INFO',
+            target={'server_id': server_id, 'hostname': hostname, 'port': port},
+            details={'ssh_username': username, 'session_id': session_id}
+        )
+        return jsonify({
+            'success': True,
+            'session_id': session_id,
+            'server_id': server_id,
+            'group_id': group_id,
+            'hostname': hostname,
+            'port': port,
+            'username': username
+        })
         
     except Exception as e:
+        log_audit_event(
+            event_type='SSH_CONNECT',
+            status='FAILURE',
+            severity='WARNING',
+            target={'server_id': server_id, 'hostname': hostname, 'port': port},
+            details={'ssh_username': username, 'error': str(e)}
+        )
         return jsonify({'success': False, 'error': str(e)})
 
 
@@ -109,15 +212,9 @@ def ssh_command():
     """
     Monitor 1: Execute SSH command
     """
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     session_id = data.get('session_id')
     command = data.get('command')
-    
-    # Optional credentials for auto-reconnection
-    hostname = data.get('hostname')
-    port = data.get('port')
-    username = data.get('username')
-    password = data.get('password')
 
     if not command:
         return jsonify({'success': False, 'error': 'Missing command'})
@@ -130,32 +227,40 @@ def ssh_command():
         session_data = ssh_sessions[session_id]
         ssh = session_data['ssh']
     
-    # If no session or invalid, try to reconnect if credentials provided
-    if not ssh and all([hostname, port, username, password]):
-        try:
-            # Reconnect
-            port = int(port)
-            ssh, sftp = connect_sftp(hostname, port, username, password)
-            
-            # Determine initial CWD
-            stdin, stdout, stderr = ssh.exec_command("pwd")
-            initial_cwd = stdout.read().decode('utf-8').strip()
-            
-            # Create new session
-            new_session_id = f"{hostname}_{username}_{int(time.time())}"
-            ssh_sessions[new_session_id] = {
-                'ssh': ssh,
-                'hostname': hostname,
-                'port': port,
-                'username': username,
-                'password': password,
-                'sftp': sftp,
-                'cwd': initial_cwd
-            }
-            session_id = new_session_id
-            session_data = ssh_sessions[new_session_id]
-        except Exception as e:
-             return jsonify({'success': False, 'error': f'Reconnection failed: {str(e)}'})
+    # If no session or invalid, try to reconnect resolving credentials from vault/session
+    if not ssh:
+        resolved = settings.resolve_connection_credentials(data, user=get_current_user(), ssh_sessions=ssh_sessions)
+        if resolved:
+            try:
+                hostname = resolved['hostname']
+                port = resolved['port']
+                username = resolved['username']
+                password = resolved['password']
+                private_key = resolved.get('private_key', '')
+                ssh, sftp = connect_sftp(hostname, port, username, password, private_key=private_key)
+                
+                # Determine initial CWD
+                stdin, stdout, stderr = ssh.exec_command("pwd")
+                initial_cwd = stdout.read().decode('utf-8').strip()
+                
+                # Create new session
+                new_session_id = f"{hostname}_{username}_{int(time.time())}"
+                ssh_sessions[new_session_id] = {
+                    'ssh': ssh,
+                    'hostname': hostname,
+                    'port': port,
+                    'username': username,
+                    'password': password,
+                    'private_key': private_key,
+                    'server_id': resolved.get('server_id'),
+                    'group_id': resolved.get('group_id'),
+                    'sftp': sftp,
+                    'cwd': initial_cwd
+                }
+                session_id = new_session_id
+                session_data = ssh_sessions[new_session_id]
+            except Exception as e:
+                return jsonify({'success': False, 'error': f'Reconnection failed: {str(e)}'})
 
     if not ssh:
          return jsonify({'success': False, 'error': 'No active session and no credentials provided'})
@@ -184,6 +289,17 @@ def ssh_command():
                     new_cwd = potential_cwd
                     session_data['cwd'] = new_cwd
         
+        log_audit_event(
+            event_type='SSH_COMMAND',
+            status='SUCCESS' if result['exit_code'] == 0 else 'FAILURE',
+            severity='NOTICE',
+            target={
+                'server_id': session_data.get('server_id'),
+                'hostname': session_data.get('hostname'),
+                'port': session_data.get('port', 22)
+            },
+            details={'command': command, 'cwd': new_cwd, 'exit_code': result['exit_code']}
+        )
         return jsonify({
             'success': True,
             'stdout': cmd_output,
@@ -212,12 +328,13 @@ def ssh_stats():
     port = session_data['port']
     username = session_data['username']
     password = session_data['password']
+    private_key = session_data.get('private_key', '')
 
     def generate():
         ssh = None
         try:
             # Connect
-            ssh, _ = connect_sftp(hostname, port, username, password)
+            ssh, _ = connect_sftp(hostname, port, username, password, private_key=private_key)
             
             # Stream stats every 2 seconds
             while True:
@@ -261,6 +378,13 @@ def api_create_user():
             role=role,
             allowed_groups=allowed_groups
         )
+        log_audit_event(
+            event_type='USER_CREATED',
+            status='SUCCESS',
+            severity='NOTICE',
+            target={'resource': f"user:{user['username']}", 'user_id': user['id']},
+            details={'role': user['role'], 'allowed_groups': user['allowed_groups']}
+        )
         return jsonify(user), 201
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
@@ -280,6 +404,17 @@ def api_update_user(user_id):
         )
         if result is None:
             return jsonify({'error': 'User not found'}), 404
+        log_audit_event(
+            event_type='USER_UPDATED',
+            status='SUCCESS',
+            severity='NOTICE',
+            target={'resource': f"user:{result['username']}", 'user_id': user_id},
+            details={
+                'role': result['role'],
+                'allowed_groups': result['allowed_groups'],
+                'password_changed': bool(data.get('password'))
+            }
+        )
         return jsonify(result)
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
@@ -291,13 +426,80 @@ def api_delete_user(user_id):
     current = get_current_user()
     if current and current['id'] == user_id:
         return jsonify({'error': 'Cannot delete your own active account.'}), 400
+    target_user = settings.get_user_by_id(user_id, safe=True)
     try:
         ok = settings.delete_user(user_id)
         if not ok:
             return jsonify({'error': 'User not found'}), 404
+        log_audit_event(
+            event_type='USER_DELETED',
+            status='SUCCESS',
+            severity='WARNING',
+            target={'resource': f"user:{target_user['username'] if target_user else user_id}", 'user_id': user_id}
+        )
         return jsonify({'success': True})
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
+
+
+# --- Audit Log API (Admin Only) ---
+
+@app.route('/api/audit', methods=['GET'])
+@role_required('admin')
+def api_get_audit():
+    limit = request.args.get('limit', 200)
+    event_type = request.args.get('event_type') or None
+    status = request.args.get('status') or None
+    events = get_audit_events(limit=limit, event_type=event_type, status=status)
+    chain = verify_audit_chain()
+    return jsonify({
+        'events': events,
+        'chain': chain
+    })
+
+
+@app.route('/api/audit/export', methods=['GET'])
+@role_required('admin')
+def api_export_audit():
+    log_audit_event(
+        event_type='AUDIT_LOG_EXPORTED',
+        status='SUCCESS',
+        severity='NOTICE'
+    )
+    if not os.path.exists(AUDIT_LOG_FILE):
+        return Response('', mimetype='application/x-ndjson', headers={
+            'Content-Disposition': 'attachment; filename=amiko_audit.jsonl'
+        })
+    with open(AUDIT_LOG_FILE, 'r', encoding='utf-8') as f:
+        content = f.read()
+    return Response(content, mimetype='application/x-ndjson', headers={
+        'Content-Disposition': 'attachment; filename=amiko_audit.jsonl'
+    })
+
+
+@app.route('/api/known-hosts', methods=['GET'])
+@role_required('admin')
+def api_get_known_hosts():
+    return jsonify(get_known_hosts_list())
+
+
+@app.route('/api/known-hosts', methods=['DELETE'])
+@role_required('admin')
+def api_delete_known_host():
+    data = request.get_json(silent=True) or {}
+    host_entry = (data.get('host') or '').strip()
+    if not host_entry:
+        return jsonify({'error': 'host is required'}), 400
+    ok = remove_known_host(host_entry)
+    if not ok:
+        return jsonify({'error': 'Host entry not found'}), 404
+    log_audit_event(
+        event_type='SSH_HOST_KEY_REVOKED',
+        status='SUCCESS',
+        severity='WARNING',
+        target={'hostname': host_entry}
+    )
+    return jsonify({'success': True})
 
 
 # --- Settings API ---
@@ -316,6 +518,12 @@ def api_create_group():
     if not name:
         return jsonify({'error': 'Name is required'}), 400
     group = settings.create_group(name, icon)
+    log_audit_event(
+        event_type='GROUP_CREATED',
+        status='SUCCESS',
+        severity='INFO',
+        target={'resource': f"group:{group['name']}", 'group_id': group['id']}
+    )
     return jsonify(group), 201
 
 
@@ -331,6 +539,12 @@ def api_update_group(group_id):
     )
     if result is None:
         return jsonify({'error': 'Group not found'}), 404
+    log_audit_event(
+        event_type='GROUP_UPDATED',
+        status='SUCCESS',
+        severity='INFO',
+        target={'resource': f"group:{result['name']}", 'group_id': group_id}
+    )
     return jsonify(result)
 
 
@@ -338,6 +552,12 @@ def api_update_group(group_id):
 @role_required('admin')
 def api_delete_group(group_id):
     settings.delete_group(group_id)
+    log_audit_event(
+        event_type='GROUP_DELETED',
+        status='SUCCESS',
+        severity='WARNING',
+        target={'resource': f"group:{group_id}", 'group_id': group_id}
+    )
     return jsonify({'success': True})
 
 
@@ -361,7 +581,15 @@ def api_create_server():
         port=data.get('port', 22),
         username=data.get('username', 'root'),
         password=data.get('password', ''),
+        private_key=data.get('private_key', ''),
         notes=data.get('notes', '')
+    )
+    log_audit_event(
+        event_type='SERVER_CREATED',
+        status='SUCCESS',
+        severity='NOTICE',
+        target={'server_id': server['id'], 'hostname': server['hostname'], 'port': server['port']},
+        details={'name': server['name'], 'group_id': server['group_id'], 'ssh_username': server['username']}
     )
     return jsonify(server), 201
 
@@ -373,13 +601,28 @@ def api_update_server(server_id):
     result = settings.update_server(server_id, **data)
     if result is None:
         return jsonify({'error': 'Server not found'}), 404
+    log_audit_event(
+        event_type='SERVER_UPDATED',
+        status='SUCCESS',
+        severity='NOTICE',
+        target={'server_id': server_id, 'hostname': result['hostname'], 'port': result['port']},
+        details={'name': result['name'], 'password_updated': bool(data.get('password'))}
+    )
     return jsonify(result)
 
 
 @app.route('/api/servers/<server_id>', methods=['DELETE'])
 @role_required('admin')
 def api_delete_server(server_id):
+    srv = settings.get_server_by_id(server_id, safe=True)
     settings.delete_server(server_id)
+    log_audit_event(
+        event_type='SERVER_DELETED',
+        status='SUCCESS',
+        severity='WARNING',
+        target={'server_id': server_id, 'hostname': srv['hostname'] if srv else ''},
+        details={'name': srv['name'] if srv else server_id}
+    )
     return jsonify({'success': True})
 
 

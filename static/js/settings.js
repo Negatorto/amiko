@@ -51,6 +51,7 @@ class SettingsPanel {
         if (tabName === 'groups') this.loadGroups();
         else if (tabName === 'servers') this.loadServers();
         else if (tabName === 'users') this.loadUsers();
+        else if (tabName === 'audit') this.loadAudit();
         else if (tabName === 'themes') this.loadThemes();
         else if (tabName === 'interface') this.loadInterface();
     }
@@ -63,6 +64,95 @@ class SettingsPanel {
         this.overlay.addEventListener('click', (e) => {
             if (e.target === this.overlay) this.close();
         });
+
+        const refreshAuditBtn = document.getElementById('btnRefreshAudit');
+        const statusFilter = document.getElementById('auditStatusFilter');
+        if (refreshAuditBtn) refreshAuditBtn.addEventListener('click', () => this.loadAudit());
+        if (statusFilter) statusFilter.addEventListener('change', () => this.loadAudit());
+    }
+
+    // ========================
+    // AUDIT LOG TAB (Admin)
+    // ========================
+
+    async loadAudit() {
+        const wrapper = document.getElementById('auditTableWrapper');
+        const badge = document.getElementById('auditChainBadge');
+        const statusFilter = document.getElementById('auditStatusFilter');
+        if (!wrapper) return;
+
+        const status = statusFilter ? statusFilter.value : '';
+        const url = `/api/audit?limit=150${status ? `&status=${encodeURIComponent(status)}` : ''}`;
+
+        try {
+            const res = await this.api('GET', url);
+            const chain = res.chain || { valid: true, total_entries: 0 };
+            const events = res.events || [];
+
+            if (badge) {
+                if (chain.valid) {
+                    badge.textContent = `🔒 SHA-256 Hash Chain Verified (${chain.total_entries} records)`;
+                    badge.style.borderColor = 'rgba(0, 180, 80, 0.5)';
+                    badge.style.color = 'var(--text-primary)';
+                } else {
+                    badge.textContent = `⚠️ Chain Tampering Detected at line ${chain.corrupted_line}! (${chain.reason || ''})`;
+                    badge.style.borderColor = 'var(--accent-danger)';
+                    badge.style.color = 'var(--accent-danger)';
+                }
+            }
+
+            if (events.length === 0) {
+                wrapper.innerHTML = '<div class="settings-empty">No audit events recorded yet.</div>';
+                return;
+            }
+
+            const rows = events.map(ev => {
+                const ts = (ev.timestamp || '').replace('T', ' ').slice(0, 19);
+                const actor = ev.actor ? `${ev.actor.username || 'anon'} (${ev.actor.source_ip || '-'})` : '-';
+                const targetObj = ev.target || {};
+                const target = targetObj.hostname
+                    ? `${targetObj.hostname}:${targetObj.port || 22}${targetObj.resource ? ' ' + targetObj.resource : ''}`
+                    : (targetObj.resource || '-');
+                const detailsStr = ev.details && Object.keys(ev.details).length > 0
+                    ? JSON.stringify(ev.details)
+                    : '';
+                const hashShort = (ev.integrity_hash || '').slice(0, 10);
+                const statusColor = ev.status === 'SUCCESS'
+                    ? '#2ecc71'
+                    : (ev.status === 'DENIED' ? '#e74c3c' : '#f39c12');
+
+                return `
+                    <tr>
+                        <td style="white-space:nowrap; font-size:11px;">${this.escapeHtml(ts)}</td>
+                        <td style="font-weight:700; font-size:11px;">${this.escapeHtml(ev.event_type)}</td>
+                        <td><span style="color:${statusColor}; font-weight:700; font-size:11px;">${this.escapeHtml(ev.status)}</span></td>
+                        <td style="font-size:11px;">${this.escapeHtml(actor)}</td>
+                        <td style="font-size:11px;">${this.escapeHtml(target)}</td>
+                        <td style="font-size:11px; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${this.escapeAttr(detailsStr)}">${this.escapeHtml(detailsStr)}</td>
+                        <td style="font-family:monospace; font-size:10px; color:var(--text-dim);" title="${this.escapeAttr(ev.integrity_hash || '')}">${this.escapeHtml(hashShort)}…</td>
+                    </tr>
+                `;
+            }).join('');
+
+            wrapper.innerHTML = `
+                <table class="server-table">
+                    <thead>
+                        <tr>
+                            <th>Timestamp (UTC)</th>
+                            <th>Event</th>
+                            <th>Status</th>
+                            <th>Actor (IP)</th>
+                            <th>Target</th>
+                            <th>Details</th>
+                            <th>SHA-256</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        } catch (e) {
+            console.error('[Settings] Error loading audit log:', e);
+        }
     }
 
     // ========================
@@ -421,17 +511,20 @@ class SettingsPanel {
             }
 
             groupServers.forEach(s => {
+                const hasPw = s.has_password !== false && Boolean(s.has_password || s.password);
+                const hasKey = Boolean(s.has_private_key);
                 tbody += `
-                    <tr data-server-id="${s.id}">
+                    <tr data-server-id="${s.id}" data-group-id="${this.escapeAttr(s.group_id || '')}">
                         <td><span class="cell-editable" contenteditable="true" data-field="name">${this.escapeHtml(s.name)}</span></td>
                         <td><span class="cell-editable" contenteditable="true" data-field="hostname">${this.escapeHtml(s.hostname)}</span></td>
                         <td><span class="cell-editable" contenteditable="true" data-field="port">${s.port}</span></td>
                         <td><span class="cell-editable" contenteditable="true" data-field="username">${this.escapeHtml(s.username)}</span></td>
-                        <td><span class="cell-editable cell-password" contenteditable="true" data-field="password" data-real-value="${this.escapeAttr(s.password)}">${'•'.repeat(s.password ? s.password.length : 0)}</span></td>
+                        <td><span class="cell-editable cell-password" contenteditable="true" data-field="password" data-has-password="${hasPw ? '1' : '0'}" data-real-value="" title="Click to enter a new password (leave blank to keep stored secret)">${hasKey ? '🔑 SSH Key' : (hasPw ? '••••••••' : '')}</span></td>
                         <td><span class="cell-editable" contenteditable="true" data-field="notes">${this.escapeHtml(s.notes || '')}</span></td>
                         <td>
                             <div class="row-actions">
                                 <button class="btn-save" title="Save changes" data-id="${s.id}">💾</button>
+                                <button class="btn-sshkey" title="Set SSH Private Key (Ed25519 / RSA)" data-id="${s.id}" data-name="${this.escapeAttr(s.name)}">🔑</button>
                                 <button class="btn-use" title="Use for connection" data-id="${s.id}">🔌</button>
                                 <button class="btn-delete" title="Delete" data-id="${s.id}">🗑️</button>
                             </div>
@@ -458,26 +551,31 @@ class SettingsPanel {
             </table>
         `;
 
-        // Password reveal/hide on focus
+        // Password edit on focus (never exposes stored password; only sets a new one if typed)
         tableWrapper.querySelectorAll('.cell-password').forEach(cell => {
             cell.addEventListener('focus', () => {
-                const real = cell.dataset.realValue || '';
-                cell.textContent = real;
+                cell.textContent = cell.dataset.realValue || '';
             });
             cell.addEventListener('blur', () => {
                 const current = cell.textContent.trim();
                 cell.dataset.realValue = current;
-                cell.textContent = '•'.repeat(current.length);
+                if (current) {
+                    cell.textContent = '•'.repeat(current.length);
+                } else {
+                    cell.textContent = cell.dataset.hasPassword === '1' ? '••••••••' : '';
+                }
             });
         });
 
         // Event delegation for table actions
         tableWrapper.addEventListener('click', (e) => {
             const btnSave = e.target.closest('.btn-save');
+            const btnKey = e.target.closest('.btn-sshkey');
             const btnUse = e.target.closest('.btn-use');
             const btnDelete = e.target.closest('.btn-delete');
 
             if (btnSave) this.saveServerRow(btnSave.dataset.id);
+            else if (btnKey) this.setServerSshKey(btnKey.dataset.id, btnKey.dataset.name);
             else if (btnUse) this.useServer(btnUse.dataset.id);
             else if (btnDelete) this.deleteServer(btnDelete.dataset.id);
         });
@@ -513,6 +611,59 @@ class SettingsPanel {
                 this.refreshQuickList();
             });
         }
+
+        this.loadKnownHosts();
+    }
+
+    async loadKnownHosts() {
+        const wrapper = this.overlay.querySelector('#knownHostsTableWrapper');
+        if (!wrapper) return;
+
+        const entries = await this.api('GET', '/api/known-hosts');
+        if (!Array.isArray(entries) || entries.length === 0) {
+            wrapper.innerHTML = `<div style="padding:12px; color:var(--text-dim); font-size:12px; font-style:italic;">No SSH host keys pinned yet. Keys are automatically pinned and verified on first connection.</div>`;
+            return;
+        }
+
+        const rows = entries.map(item => `
+            <tr>
+                <td style="font-family:var(--font-mono); font-size:12px;">${this.escapeHtml(item.host || '')}</td>
+                <td style="font-family:var(--font-mono); font-size:11px; color:var(--text-dim);">${this.escapeHtml(item.key_type || '')}</td>
+                <td style="font-family:var(--font-mono); font-size:11px; color:var(--accent-highlight);">${this.escapeHtml(item.fingerprint || '')}</td>
+                <td style="width:60px; text-align:center;">
+                    <button class="btn-del-kh" title="Unpin / Reset Host Key" data-host="${this.escapeAttr(item.host || '')}" style="background:none; border:none; cursor:pointer;">🗑️</button>
+                </td>
+            </tr>
+        `).join('');
+
+        wrapper.innerHTML = `
+            <table class="server-table">
+                <thead>
+                    <tr>
+                        <th>Host Entry</th>
+                        <th>Key Type</th>
+                        <th>SHA-256 Fingerprint</th>
+                        <th>Reset</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        `;
+
+        wrapper.querySelectorAll('.btn-del-kh').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const host = btn.dataset.host;
+                const doRemove = async () => {
+                    await this.api('DELETE', '/api/known-hosts', { host });
+                    this.loadKnownHosts();
+                };
+                if (window.AmikoConfirm) {
+                    window.AmikoConfirm('Reset SSH Host Key', `Remove pinned host key for "${host}"?`, doRemove);
+                } else if (confirm(`Remove pinned host key for "${host}"?`)) {
+                    doRemove();
+                }
+            });
+        });
     }
 
     async saveServerRow(serverId) {
@@ -522,7 +673,12 @@ class SettingsPanel {
         const data = {};
         row.querySelectorAll('.cell-editable').forEach(cell => {
             if (cell.dataset.field === 'password') {
-                data[cell.dataset.field] = cell.dataset.realValue || cell.textContent.trim();
+                const newPw = (cell.dataset.realValue || '').trim();
+                if (newPw) {
+                    data.password = newPw;
+                    cell.dataset.hasPassword = '1';
+                    cell.dataset.realValue = '';
+                }
             } else {
                 data[cell.dataset.field] = cell.textContent.trim();
             }
@@ -537,24 +693,106 @@ class SettingsPanel {
         setTimeout(() => { row.style.backgroundColor = ''; }, 800);
     }
 
+    async setServerSshKey(serverId, serverName) {
+        const applyKey = async (pemValue) => {
+            const cleaned = (pemValue || '').trim();
+            const r = await this.api('PUT', `/api/servers/${serverId}`, { private_key: cleaned || '__CLEAR__' });
+            if (r && r.error) {
+                if (window.AmikoAlert) window.AmikoAlert('Error', r.error);
+                return;
+            }
+            this.loadServers();
+            this.refreshQuickList();
+            if (window.AmikoAlert) {
+                const msg = cleaned
+                    ? `Encrypted SSH private key stored in vault for "${serverName}".`
+                    : `SSH private key cleared for "${serverName}".`;
+                window.AmikoAlert('SSH Key Updated', msg, 'info');
+            }
+        };
+
+        if (window.WinBox) {
+            const wb = new WinBox({
+                title: `SSH Private Key — ${serverName}`,
+                html: `
+                    <div class="amiko-alert-content" style="padding: 16px; display:flex; flex-direction:column; gap:10px; height:100%; box-sizing:border-box;">
+                        <p style="margin:0; font-size:12px; color: var(--text-primary); text-align:left;">
+                            Paste the multi-line PEM / OpenSSH private key (<code>-----BEGIN OPENSSH PRIVATE KEY-----</code>) for <strong>${this.escapeHtml(serverName)}</strong>. Leave empty and click Save to remove a stored key.
+                        </p>
+                        <textarea id="amiko-sshkey-textarea" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;...&#10;-----END OPENSSH PRIVATE KEY-----" style="width:100%; flex:1; min-height:140px; padding:8px; background:var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-medium); border-radius:4px; font-family:var(--font-mono); font-size:11px; resize:none;"></textarea>
+                        <div style="display:flex; gap:10px; justify-content:flex-end;">
+                            <button id="btn-sshkey-save" class="btn-connect" style="background: rgba(0, 180, 80, 0.15); color: #4cff88; border: 1px solid rgba(0, 180, 80, 0.4); padding: 6px 18px; border-radius: 4px; cursor: pointer;">Save Key</button>
+                            <button id="btn-sshkey-cancel" class="btn-disconnect" style="background: rgba(255, 60, 60, 0.1); color: #ff6b6b; border: 1px solid rgba(255, 60, 60, 0.3); padding: 6px 18px; border-radius: 4px; cursor: pointer;">Cancel</button>
+                        </div>
+                    </div>
+                `,
+                class: ['wb-amiko', 'wb-amiko-warning'],
+                width: 520,
+                height: 310,
+                x: "center",
+                y: "center",
+                top: 70,
+                index: 10001,
+                modal: true
+            });
+            setTimeout(() => {
+                const ta = document.getElementById('amiko-sshkey-textarea');
+                const btnSave = document.getElementById('btn-sshkey-save');
+                const btnCancel = document.getElementById('btn-sshkey-cancel');
+                if (ta) ta.focus();
+                if (btnSave) btnSave.addEventListener('click', () => {
+                    const val = ta ? ta.value : '';
+                    wb.close();
+                    applyKey(val);
+                });
+                if (btnCancel) btnCancel.addEventListener('click', () => wb.close());
+            }, 80);
+        } else {
+            const pem = prompt(`Paste SSH private key (PEM/OpenSSH) for "${serverName}":`);
+            if (pem !== null) applyKey(pem);
+        }
+    }
+
     async useServer(serverId) {
         const row = this.overlay.querySelector(`tr[data-server-id="${serverId}"]`);
         if (!row) return;
 
         const fields = {};
         row.querySelectorAll('.cell-editable').forEach(cell => {
-            if (cell.dataset.field === 'password') {
-                fields[cell.dataset.field] = cell.dataset.realValue || cell.textContent.trim();
-            } else {
+            if (cell.dataset.field !== 'password') {
                 fields[cell.dataset.field] = cell.textContent.trim();
             }
         });
 
-        // Fill the global connection form
+        window.globalConnection.serverId = serverId;
+        window.globalConnection.groupId = row.dataset.groupId || null;
+
+        // Fill the global connection form (password remains in backend vault)
         document.getElementById('global_hostname').value = fields.hostname || '';
         document.getElementById('global_port').value = fields.port || 22;
         document.getElementById('global_username').value = fields.username || '';
-        document.getElementById('global_password').value = fields.password || '';
+        const pwInput = document.getElementById('global_password');
+        if (pwInput) {
+            pwInput.value = '';
+            pwInput.placeholder = 'Stored in Vault 🔒';
+            pwInput.required = false;
+        }
+
+        // Sync #saved_servers dropdown selection if present
+        const savedSelect = document.getElementById('saved_servers');
+        if (savedSelect) {
+            for (const opt of savedSelect.options) {
+                if (opt.value && opt.value !== 'new') {
+                    try {
+                        const parsed = JSON.parse(opt.value);
+                        if (parsed.id === serverId) {
+                            savedSelect.value = opt.value;
+                            break;
+                        }
+                    } catch (_) {}
+                }
+            }
+        }
 
         this.close();
     }

@@ -201,7 +201,7 @@
                     </div>
                     <div class="form-field-inline">
                         <label for="global_password">PASSWORD</label>
-                        <input type="password" id="global_password" placeholder="••••••" required {% if current_user.role != 'admin' %}readonly{% endif %}>
+                        <input type="password" id="global_password" placeholder="{% if current_user.role != 'admin' %}Stored in Vault 🔒{% else %}••••••{% endif %}" {% if current_user.role == 'admin' %}required{% else %}readonly{% endif %}>
                     </div>
                     <button type="submit" id="globalConnectBtn" class="btn-connect">CONNECT</button>
                 </div>
@@ -261,7 +261,7 @@
     <!-- BOTTOM BAR                                    -->
     <!-- ══════════════════════════════════════════════ -->
     <div class="bottom-bar" id="bottom-bar">
-        <span class="bottombar-brand">AMIKO v0.4</span>
+        <span class="bottombar-brand">AMIKO v0.5</span>
         <span class="bottombar-center"></span>
         <div class="bottombar-status">
             <span class="bottombar-dot" id="bottombarDot"></span>
@@ -308,6 +308,10 @@
                         <span class="settings-tab-icon">👥</span>
                         <span class="settings-tab-label">Users</span>
                     </button>
+                    <button class="settings-tab-btn" data-tab="audit" title="Security Audit Log">
+                        <span class="settings-tab-icon">🛡️</span>
+                        <span class="settings-tab-label">Audit</span>
+                    </button>
                     {% endif %}
                     <button class="settings-tab-btn {% if current_user.role != 'admin' %}active{% endif %}" data-tab="themes" title="Themes">
                         <span class="settings-tab-icon">🎨</span>
@@ -346,6 +350,27 @@
                             <button type="submit">+ ADD USER</button>
                         </form>
                         <div class="user-list"></div>
+                    </div>
+
+                    <!-- Security Audit Log Section (Admin Only) -->
+                    <div class="settings-section" data-section="audit">
+                        <h3 class="settings-section-title">Immutable Security Audit Trail</h3>
+                        <div class="audit-toolbar" style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
+                            <div id="auditChainBadge" style="font-size:12px; padding:6px 10px; border-radius:4px; border:1px solid var(--border);">
+                                Checking hash chain integrity...
+                            </div>
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <select id="auditStatusFilter" style="padding:6px 10px; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border); font-family:var(--font-mono); font-size:12px;">
+                                    <option value="">All Statuses</option>
+                                    <option value="SUCCESS">SUCCESS</option>
+                                    <option value="FAILURE">FAILURE</option>
+                                    <option value="DENIED">DENIED</option>
+                                </select>
+                                <button type="button" id="btnRefreshAudit" style="padding:6px 10px; cursor:pointer; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border); font-family:var(--font-mono); font-size:12px;">🔄 Refresh</button>
+                                <a href="/api/audit/export" id="btnExportAudit" style="padding:6px 12px; text-decoration:none; background:var(--accent-highlight); color:#fff; border-radius:4px; font-family:var(--font-mono); font-size:12px;">⬇️ Export JSONL</a>
+                            </div>
+                        </div>
+                        <div class="server-table-wrapper" id="auditTableWrapper"></div>
                     </div>
 
                     <!-- Groups Section -->
@@ -398,6 +423,9 @@
                                 <button type="submit">+ ADD</button>
                             </form>
                         </div>
+
+                        <h3 class="settings-section-title" style="margin-top: 24px;">Pinned SSH Host Keys (known_hosts)</h3>
+                        <div class="server-table-wrapper" id="knownHostsTableWrapper"></div>
                     </div>
 
                     <!-- Themes Section -->

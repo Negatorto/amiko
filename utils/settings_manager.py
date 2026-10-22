@@ -224,15 +224,35 @@ class SettingsManager:
         allowed = set(user.get("allowed_groups", []))
         return [g for g in all_groups if g["id"] in allowed]
 
-    def get_servers_for_user(self, user, group_id=None):
+    @staticmethod
+    def _sanitize_server(server):
+        """Strip plaintext password and private_key before sending server metadata to the frontend."""
+        if not server:
+            return None
+        sanitized = {k: v for k, v in server.items() if k not in ("password", "private_key")}
+        sanitized["has_password"] = bool(server.get("password") or server.get("private_key"))
+        sanitized["has_private_key"] = bool(server.get("private_key"))
+        return sanitized
+
+    def get_server_by_id(self, server_id, safe=True):
+        if not server_id:
+            return None
+        for s in self._settings.get("servers", []):
+            if s["id"] == server_id:
+                return self._sanitize_server(s) if safe else s
+        return None
+
+    def get_servers_for_user(self, user, group_id=None, safe=True):
         if self.is_full_access_user(user):
-            return self.get_servers(group_id)
+            return self.get_servers(group_id, safe=safe)
         if not user:
             return []
         allowed = set(user.get("allowed_groups", []))
         servers = [s for s in self._settings["servers"] if s.get("group_id") in allowed]
         if group_id:
             servers = [s for s in servers if s.get("group_id") == group_id]
+        if safe:
+            return [self._sanitize_server(s) for s in servers]
         return servers
 
     def get_quick_list_for_user(self, user):
@@ -252,7 +272,7 @@ class SettingsManager:
         allowed_groups = set(user.get("allowed_groups", []))
         if group_id and group_id in allowed_groups:
             return True
-        allowed_servers = self.get_servers_for_user(user)
+        allowed_servers = self.get_servers_for_user(user, safe=False)
         if server_id and any(s["id"] == server_id for s in allowed_servers):
             return True
         if hostname:
@@ -264,6 +284,74 @@ class SettingsManager:
                 if s["hostname"] == hostname:
                     return True
         return False
+
+    def resolve_connection_credentials(self, data, user=None, ssh_sessions=None):
+        """
+        Resolve (hostname, port, username, password, private_key, server_id, group_id) on the backend
+        so plaintext passwords and SSH private keys never need to travel to or from the browser.
+        """
+        data = data or {}
+        session_id = data.get("session_id")
+        server_id = data.get("server_id")
+        hostname = (data.get("hostname") or "").strip()
+        port = int(data.get("port") or 22)
+        username = (data.get("username") or "").strip()
+        password = data.get("password") or ""
+        private_key = data.get("private_key") or ""
+        group_id = data.get("group_id")
+
+        # 1. Resolve from active server-side SSH session if session_id is valid
+        if session_id and ssh_sessions and session_id in ssh_sessions:
+            s_data = ssh_sessions[session_id]
+            hostname = hostname or s_data.get("hostname", "")
+            port = int(data.get("port") or s_data.get("port", 22))
+            username = username or s_data.get("username", "")
+            password = password or s_data.get("password", "")
+            private_key = private_key or s_data.get("private_key", "")
+            server_id = server_id or s_data.get("server_id")
+            group_id = group_id or s_data.get("group_id")
+
+        # 2. Resolve from encrypted vault by server_id
+        if server_id:
+            srv = self.get_server_by_id(server_id, safe=False)
+            if srv and (user is None or self.can_user_access_server(user, server_id=server_id)):
+                hostname = hostname or srv.get("hostname", "")
+                port = int(data.get("port") or srv.get("port", 22))
+                username = username or srv.get("username", "")
+                if not password:
+                    password = srv.get("password", "")
+                if not private_key:
+                    private_key = srv.get("private_key", "")
+                group_id = group_id or srv.get("group_id")
+
+        # 3. Fallback: match by (hostname, port, username) in user's allowed vault servers
+        if hostname and not (password or private_key):
+            candidates = self.get_servers_for_user(user, safe=False) if user else self.get_servers(safe=False)
+            for srv in candidates:
+                if (
+                    srv.get("hostname") == hostname
+                    and int(srv.get("port", 22)) == port
+                    and (not username or srv.get("username") == username)
+                ):
+                    username = username or srv.get("username", "")
+                    password = srv.get("password", "")
+                    private_key = srv.get("private_key", "")
+                    server_id = server_id or srv.get("id")
+                    group_id = group_id or srv.get("group_id")
+                    break
+
+        if not hostname or not username:
+            return None
+
+        return {
+            "hostname": hostname,
+            "port": port,
+            "username": username,
+            "password": password,
+            "private_key": private_key,
+            "server_id": server_id,
+            "group_id": group_id
+        }
 
     # --- Groups CRUD ---
 
@@ -311,14 +399,16 @@ class SettingsManager:
 
     # --- Servers CRUD ---
 
-    def get_servers(self, group_id=None):
+    def get_servers(self, group_id=None, safe=True):
         servers = self._settings["servers"]
         if group_id:
             servers = [s for s in servers if s.get("group_id") == group_id]
+        if safe:
+            return [self._sanitize_server(s) for s in servers]
         return servers
 
     def create_server(self, group_id, name, hostname, port=22,
-                      username="root", password="", notes=""):
+                      username="root", password="", private_key="", notes=""):
         server = {
             "id": str(uuid.uuid4()),
             "group_id": group_id,
@@ -327,20 +417,29 @@ class SettingsManager:
             "port": int(port),
             "username": username,
             "password": password,
+            "private_key": private_key,
             "notes": notes
         }
         self._settings["servers"].append(server)
         self._save()
-        return server
+        return self._sanitize_server(server)
 
     def update_server(self, server_id, **kwargs):
         for s in self._settings["servers"]:
             if s["id"] == server_id:
                 for key, val in kwargs.items():
-                    if key in s and key != "id":
-                        s[key] = int(val) if key == "port" else val
+                    if key in ("name", "hostname", "port", "username", "password", "private_key", "notes", "group_id"):
+                        if key in ("password", "private_key"):
+                            if val == "__CLEAR__":
+                                s[key] = ""
+                            elif val is not None and str(val).strip() != "":
+                                s[key] = val
+                        elif key == "port":
+                            s["port"] = int(val)
+                        else:
+                            s[key] = val
                 self._save()
-                return s
+                return self._sanitize_server(s)
         return None
 
     def delete_server(self, server_id):
@@ -351,7 +450,7 @@ class SettingsManager:
         return True
 
     def get_quick_list(self):
-        """Compact server list for connection dropdown, grouped by category."""
+        """Compact server list for connection dropdown, grouped by category (Zero-Password)."""
         groups_map = {g["id"]: g["name"] for g in self._settings["groups"]}
         result = []
         for s in self._settings["servers"]:
@@ -361,7 +460,8 @@ class SettingsManager:
                 "hostname": s["hostname"],
                 "port": s["port"],
                 "username": s["username"],
-                "password": s["password"],
+                "has_password": bool(s.get("password") or s.get("private_key")),
+                "has_private_key": bool(s.get("private_key")),
                 "group_name": groups_map.get(s.get("group_id"), "Ungrouped"),
                 "group_id": s.get("group_id", "")
             })

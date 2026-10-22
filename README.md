@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="static/img/AMIKO.png" alt="AMIKO Logo" width="230">
+  <img src="static/img/AMIKO.png?v=0.5" alt="AMIKO Logo" width="230">
 </p>
 
 # AMIKO
@@ -79,6 +79,7 @@ amiko/
 ├── app.py                  # Main server entry point
 ├── core/                   # Core application modules
 │   ├── __init__.py         # App factory and SocketIO init
+│   ├── audit.py            # Tamper-evident SHA-256 hash-chained audit logger & rate limiter
 │   ├── auth.py             # Session authentication and 3-role RBAC engine
 │   ├── config.py           # Globals and settings
 │   ├── plugins.py          # Module auto-discovery logic
@@ -131,7 +132,7 @@ See [MODULE_GUIDELINES.md](MODULE_GUIDELINES.md) for the complete development gu
 
 ## Status
 
-AMIKO is in early development (v0.4). The core architecture is functional, but the API surface and module contracts may change as the project evolves.
+AMIKO is in early development (v0.5). The core architecture is functional, but the API surface and module contracts may change as the project evolves.
 
 ## Roadmap to v1.0.0
 
@@ -147,15 +148,16 @@ AMIKO is in early development (v0.4). The core architecture is functional, but t
 ### Security & Access Control
 - [x] Login screen with session authentication
 - [x] Role-based access control (`admin`, `operator`, `viewer`) with per-group Least Privilege
-- [ ] Multi-Factor Authentication (TOTP / 2FA) and login rate-limiting / brute-force protection
-- [ ] Zero-password frontend (resolve server credentials strictly on the backend via opaque server IDs)
-- [ ] Asymmetric SSH key authentication (`Ed25519` / `RSA`) and strict `known_hosts` host-key verification
+- [x] Zero-password frontend (resolve server credentials strictly on the backend via opaque server IDs)
+- [x] Login rate-limiting & progressive brute-force lockout protection
+- [x] Asymmetric SSH key authentication (`Ed25519` / `RSA`) and strict `known_hosts` host-key verification
+- [x] Deprecate plain-text FTP in favor of encrypted SFTP-only transport
 - [ ] Master Passphrase / OS Keyring integration for the encrypted vault (decoupling the encryption key from local disk)
-- [ ] Deprecate plain-text FTP in favor of encrypted SFTP-only transport
 - [ ] Production transport hardening (strict CORS, CSRF tokens, Content Security Policy headers, local binding behind TLS reverse proxy)
+- [ ] Multi-Factor Authentication (TOTP / 2FA)
 
 ### Auditing, Operations & Resilience
-- [ ] Structured immutable audit logging for authentication, configuration changes, and remote operations
+- [x] Structured immutable audit logging (SHA-256 hash chain) for authentication, configuration changes, and remote operations
 - [ ] Interactive SSH terminal session recording and forensic playback
 - [ ] Automated encrypted backups and disaster recovery tooling
 

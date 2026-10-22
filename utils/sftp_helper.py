@@ -7,21 +7,131 @@ import paramiko
 import stat
 import os
 import json
-import ftplib
-from io import BytesIO
+import base64
+import hashlib
+import threading
+from io import BytesIO, StringIO
+
+
+def log_audit_event(*args, **kwargs):
+    from core.audit import log_audit_event as _log_audit_event
+    return _log_audit_event(*args, **kwargs)
+
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+KNOWN_HOSTS_FILE = os.path.join(DATA_DIR, "known_hosts")
+_known_hosts_lock = threading.Lock()
+
+
+def compute_host_key_fingerprint(key: paramiko.PKey) -> str:
+    """Return OpenSSH-style SHA256 fingerprint (e.g. SHA256:xxxx)."""
+    digest = hashlib.sha256(key.asbytes()).digest()
+    b64 = base64.b64encode(digest).decode("ascii").rstrip("=")
+    return f"SHA256:{b64}"
+
+
+class ManagedHostKeyPolicy(paramiko.MissingHostKeyPolicy):
+    """
+    Pins the server's SSH host key into data/known_hosts on first connection
+    and records the cryptographic SHA-256 fingerprint in the immutable audit log.
+    Subsequent connections strictly verify the pinned key via Paramiko's host_keys.
+    """
+
+    def missing_host_key(self, client, hostname, key):
+        fingerprint = compute_host_key_fingerprint(key)
+        key_type = key.get_name()
+
+        with _known_hosts_lock:
+            os.makedirs(DATA_DIR, exist_ok=True)
+            client.get_host_keys().add(hostname, key_type, key)
+            try:
+                client.save_host_keys(KNOWN_HOSTS_FILE)
+                os.chmod(KNOWN_HOSTS_FILE, 0o600)
+            except Exception as e:
+                print(f"[SSH Security] Failed to save known_hosts: {e}")
+
+        log_audit_event(
+            event_type="SSH_HOST_KEY_PINNED",
+            status="SUCCESS",
+            severity="NOTICE",
+            target={"hostname": hostname},
+            details={"key_type": key_type, "fingerprint": fingerprint}
+        )
+
+
+def get_known_hosts_list() -> list[dict]:
+    """Return all pinned SSH host keys from data/known_hosts."""
+    if not os.path.exists(KNOWN_HOSTS_FILE):
+        return []
+    result = []
+    with _known_hosts_lock:
+        try:
+            hk = paramiko.HostKeys(KNOWN_HOSTS_FILE)
+            for host in hk.keys():
+                sub = hk[host]
+                for key_type in sub.keys():
+                    pkey = sub[key_type]
+                    result.append({
+                        "host": host,
+                        "key_type": key_type,
+                        "fingerprint": compute_host_key_fingerprint(pkey)
+                    })
+        except Exception:
+            return []
+    return result
+
+
+def remove_known_host(host_entry: str) -> bool:
+    """Remove a pinned host entry from data/known_hosts (Admin action)."""
+    if not os.path.exists(KNOWN_HOSTS_FILE) or not host_entry:
+        return False
+    with _known_hosts_lock:
+        try:
+            hk = paramiko.HostKeys(KNOWN_HOSTS_FILE)
+            if host_entry not in hk:
+                return False
+            del hk[host_entry]
+            hk.save(KNOWN_HOSTS_FILE)
+            return True
+        except Exception:
+            return False
+
+
+def load_private_key_from_pem(private_key_pem: str, passphrase: str = None) -> paramiko.PKey:
+    """Parse an Ed25519, RSA, or ECDSA private key from a PEM string in memory."""
+    pem_text = (private_key_pem or "").strip()
+    if not pem_text:
+        raise ValueError("Empty SSH private key")
+
+    pw = passphrase if passphrase else None
+    key_classes = []
+    for attr in ("Ed25519Key", "RSAKey", "ECDSAKey"):
+        cls = getattr(paramiko, attr, None)
+        if cls is not None:
+            key_classes.append(cls)
+
+    last_err = None
+    for cls in key_classes:
+        try:
+            return cls.from_private_key(StringIO(pem_text), password=pw)
+        except Exception as e:
+            last_err = e
+            continue
+
+    raise ValueError(f"Unsupported or invalid SSH private key: {last_err}")
 
 
 def connect_ftp(hostname, port, username, password, timeout=10):
     """
-    Establishes FTP connection.
-    
-    Returns:
-        ftplib.FTP: FTP client instance
+    Plain-text FTP (port 21) is disabled to prevent cleartext credential transmission.
     """
-    ftp = ftplib.FTP()
-    ftp.connect(hostname, int(port), timeout=timeout)
-    ftp.login(username, password)
-    return ftp
+    log_audit_event(
+        event_type="INSECURE_PROTOCOL_BLOCKED",
+        status="DENIED",
+        severity="WARNING",
+        target={"hostname": hostname, "port": int(port or 21)},
+        details={"protocol": "FTP", "reason": "Plain-text FTP is disabled; use SFTP/SSH"}
+    )
+    raise PermissionError("Plain-text FTP (port 21) is disabled for security. Please use encrypted SFTP/SSH.")
 
 
 def search_keyword_in_files_ftp(ftp, remote_path, keyword, case_sensitive=False, extensions=None):
@@ -192,16 +302,81 @@ def search_large_files_ftp(ftp, remote_path, threshold_mb):
     }
 
 
-def connect_sftp(hostname, port, username, password, timeout=10):
+def connect_ssh_client(hostname, port, username, password="", private_key="", timeout=10):
     """
-    Establishes SFTP connection.
+    Establishes a hardened SSH connection with:
+      - Managed known_hosts verification (rejects modified host keys to prevent MitM)
+      - Support for asymmetric SSH private keys (Ed25519, RSA, ECDSA) and/or passwords
+    """
+    port_int = int(port or 22)
+    if port_int == 21:
+        connect_ftp(hostname, port_int, username, password, timeout=timeout)
+
+    ssh = paramiko.SSHClient()
+    with _known_hosts_lock:
+        if os.path.exists(KNOWN_HOSTS_FILE):
+            try:
+                ssh.load_host_keys(KNOWN_HOSTS_FILE)
+            except Exception as e:
+                print(f"[SSH Security] Warning loading known_hosts: {e}")
+    ssh.set_missing_host_key_policy(ManagedHostKeyPolicy())
+
+    pkey = None
+    if private_key and str(private_key).strip():
+        pkey = load_private_key_from_pem(private_key, passphrase=password if password else None)
+    elif isinstance(password, str) and "-----BEGIN " in password and "PRIVATE KEY-----" in password:
+        pkey = load_private_key_from_pem(password, passphrase=None)
+
+    try:
+        connect_kwargs = {
+            "hostname": hostname,
+            "port": port_int,
+            "username": username,
+            "timeout": timeout,
+        }
+        if pkey is not None:
+            connect_kwargs["pkey"] = pkey
+            connect_kwargs["allow_agent"] = False
+            connect_kwargs["look_for_keys"] = False
+        else:
+            connect_kwargs["password"] = password if password else None
+            connect_kwargs["passphrase"] = password if password else None
+            connect_kwargs["allow_agent"] = True
+            connect_kwargs["look_for_keys"] = True
+
+        ssh.connect(**connect_kwargs)
+        return ssh
+    except paramiko.BadHostKeyException as e:
+        expected_fp = compute_host_key_fingerprint(e.expected_key) if getattr(e, "expected_key", None) else "unknown"
+        got_fp = compute_host_key_fingerprint(e.key) if getattr(e, "key", None) else "unknown"
+        log_audit_event(
+            event_type="SSH_HOST_KEY_MISMATCH",
+            status="DENIED",
+            severity="CRITICAL",
+            target={"hostname": hostname, "port": port_int},
+            details={"expected_fingerprint": expected_fp, "received_fingerprint": got_fp}
+        )
+        raise PermissionError(
+            f"SSH Host Key verification failed for {hostname}:{port_int}! "
+            f"Expected {expected_fp}, got {got_fp}. Connection blocked to prevent Man-in-the-Middle."
+        )
+
+
+def connect_sftp(hostname, port, username, password="", private_key="", timeout=10):
+    """
+    Establishes hardened SFTP connection over SSH.
     
     Returns:
         tuple: (ssh_client, sftp_client) or raises exception
     """
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect(hostname, port=int(port), username=username, password=password, timeout=timeout)
+    ssh = connect_ssh_client(
+        hostname=hostname,
+        port=port,
+        username=username,
+        password=password,
+        private_key=private_key,
+        timeout=timeout
+    )
     sftp = ssh.open_sftp()
     return ssh, sftp
 

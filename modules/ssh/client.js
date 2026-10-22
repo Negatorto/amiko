@@ -117,10 +117,11 @@ class SSHModule {
 
         this.term.write('\r\n*** Authenticating... ***\r\n');
         this.socket.emit('connect_ssh', {
+            session_id: window.globalConnection.sessionId,
+            server_id: window.globalConnection.serverId,
             hostname: window.globalConnection.hostname,
             port: window.globalConnection.port || 22,
-            username: window.globalConnection.username,
-            password: window.globalConnection.password
+            username: window.globalConnection.username
         });
     }
 
