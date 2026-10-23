@@ -1024,6 +1024,60 @@ class SettingsPanel {
         if (saveBtn) {
             saveBtn.addEventListener('click', () => this.saveInterface());
         }
+
+        // Optional Backup Export / Import (Admin)
+        const btnExport = document.getElementById('btnExportBackup');
+        const btnImport = document.getElementById('btnImportBackup');
+        const fileInput = document.getElementById('backupFileInput');
+        const passInput = document.getElementById('backupPassphrase');
+
+        if (btnExport) {
+            btnExport.addEventListener('click', async () => {
+                const passphrase = passInput ? passInput.value.trim() : '';
+                const res = await this.api('POST', '/api/backup/export', { passphrase });
+                if (res && res.error) {
+                    if (window.AmikoAlert) window.AmikoAlert('Backup Error', res.error);
+                    return;
+                }
+                const blob = new Blob([JSON.stringify(res, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const dateStr = new Date().toISOString().slice(0, 10);
+                a.href = url;
+                a.download = `amiko_backup_${dateStr}${res.encrypted ? '.enc.json' : '.json'}`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            });
+        }
+
+        if (btnImport && fileInput) {
+            btnImport.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', async () => {
+                const file = fileInput.files && fileInput.files[0];
+                if (!file) return;
+                try {
+                    const text = await file.text();
+                    const bundle = JSON.parse(text);
+                    const passphrase = passInput ? passInput.value.trim() : '';
+                    const res = await this.api('POST', '/api/backup/import', { bundle, passphrase });
+                    fileInput.value = '';
+                    if (res && res.error) {
+                        if (window.AmikoAlert) window.AmikoAlert('Restore Error', res.error);
+                        return;
+                    }
+                    this.refreshQuickList();
+                    this.loadInterface();
+                    if (window.AmikoAlert) {
+                        window.AmikoAlert('Backup Restored', 'Configuration, servers, groups, users, and notes have been restored.', 'info');
+                    }
+                } catch (err) {
+                    fileInput.value = '';
+                    if (window.AmikoAlert) window.AmikoAlert('Restore Error', 'Invalid JSON backup file.');
+                }
+            });
+        }
     }
 
     async loadInterface() {

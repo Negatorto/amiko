@@ -1,4 +1,19 @@
 <div class="amiko-module" data-module-type="explorer">
+    <style>
+        .mod-explorer-row {
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            border-bottom: 1px solid var(--border-medium, rgba(255,255,255,0.05));
+            transition: background 0.06s ease;
+        }
+        .mod-explorer-row:hover {
+            background: var(--glow-primary, rgba(255,255,255,0.06));
+        }
+        .mod-explorer-row.is-selected {
+            background: var(--glow-primary, rgba(255,255,255,0.12));
+        }
+    </style>
     <div class="module-header">
         <span class="module-title"><svg class="module-icon-svg"><use href="#icon-explorer"></use></svg> Explorer</span>
     </div>
@@ -14,10 +29,15 @@
 
         <!-- Path Input Bar -->
         <div
-            style="padding: 6px 12px; border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1)); display: flex; gap: 6px; flex-shrink: 0;">
+            style="padding: 6px 12px; border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1)); display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+            <button type="button" class="mod-explorer-btn-up mod-btn-submit" title="Parent directory (..)" style="padding: 4px 10px; font-size: 0.85em;">⬆️</button>
             <input type="text" class="mod-explorer-path-input" placeholder="/" value="/"
                 style="flex: 1; background: transparent; border: 1px solid var(--border-color, rgba(255,255,255,0.15)); color: var(--text-primary, #0f0); padding: 4px 8px; font-family: monospace; font-size: 0.85em; border-radius: 3px;">
-            <button class="mod-explorer-btn-go mod-btn-submit" style="padding: 4px 14px; font-size: 0.85em;">GO</button>
+            <span class="mod-explorer-loading" style="display: none; align-items: center; font-family: monospace; font-size: 0.78em; color: var(--accent-amber, #f0c040); white-space: nowrap;">
+                <span class="mod-explorer-loading-text">⏳</span>
+            </span>
+            <button type="button" class="mod-explorer-btn-refresh mod-btn-submit" title="Refresh folder" style="padding: 4px 10px; font-size: 0.85em;">🔄</button>
+            <button type="button" class="mod-explorer-btn-go mod-btn-submit" style="padding: 4px 14px; font-size: 0.85em;">GO</button>
         </div>
 
         <!-- File Listing Area -->

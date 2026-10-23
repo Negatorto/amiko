@@ -10,10 +10,34 @@ Implements the Principle of Least Privilege (NIS2 Art. 21.2.i):
               but cannot open SSH terminal or create/modify/delete files or notes.
 """
 
+import os
+import time
+from urllib.parse import urlparse
 from functools import wraps
 from flask import session, request, redirect, url_for, jsonify, g
 from core.config import settings, ssh_sessions
 from core.audit import log_audit_event
+
+SESSION_IDLE_TIMEOUT_SECONDS = int(os.environ.get("AMIKO_SESSION_TIMEOUT_MIN", "60")) * 60
+
+
+def is_same_origin_request() -> bool:
+    """
+    Verify that if an Origin header is present, its host matches the request Host
+    (or an explicitly whitelisted AMIKO_CORS_ORIGINS entry).
+    Prevents Cross-Site Request Forgery (CSRF) and Cross-Site WebSocket Hijacking (CSWSH).
+    """
+    origin = request.headers.get("Origin")
+    if not origin:
+        return True
+    extra = [o.strip() for o in os.environ.get("AMIKO_CORS_ORIGINS", "").split(",") if o.strip()]
+    if origin in extra:
+        return True
+    try:
+        parsed = urlparse(origin)
+        return parsed.netloc == request.host
+    except Exception:
+        return False
 
 
 ROLE_CAPABILITIES = {
@@ -109,6 +133,21 @@ def init_auth(app):
     def enforce_least_privilege():
         path = request.path
 
+        # 0. Same-Origin / Anti-CSRF verification on state-changing requests
+        if request.method in ("POST", "PUT", "DELETE") and not is_same_origin_request():
+            log_audit_event(
+                event_type="CSRF_ORIGIN_BLOCKED",
+                status="DENIED",
+                severity="ALERT",
+                target={"resource": path},
+                details={"origin": request.headers.get("Origin", ""), "host": request.host}
+            )
+            return jsonify({
+                "error": "Cross-origin request blocked by security policy.",
+                "status": "error",
+                "success": False
+            }), 403
+
         # 1. Public endpoints (login page, login API, static assets, read-only theme init)
         if (
             path in ("/login", "/api/auth/login", "/favicon.svg")
@@ -117,7 +156,20 @@ def init_auth(app):
         ):
             return None
 
-        # 2. Require authenticated user
+        # 2. Require authenticated user & enforce idle session timeout
+        now_ts = time.time()
+        last_act = session.get("last_activity")
+        if session.get("user_id") and last_act and (now_ts - float(last_act) > SESSION_IDLE_TIMEOUT_SECONDS):
+            expired_user = session.get("username", "unknown")
+            session.clear()
+            log_audit_event(
+                event_type="AUTH_SESSION_EXPIRED",
+                status="INFO",
+                severity="NOTICE",
+                actor={"username": expired_user, "source_ip": request.remote_addr or "unknown"},
+                details={"idle_timeout_seconds": SESSION_IDLE_TIMEOUT_SECONDS}
+            )
+
         user = get_current_user()
         if not user:
             if path == "/":
@@ -128,11 +180,12 @@ def init_auth(app):
                 "success": False
             }), 401
 
+        session["last_activity"] = now_ts
         g.current_user = user
         role = user.get("role", "viewer")
 
-        # 3. Admin-only endpoints: User management, Audit Log & Server/Group mutations
-        if path.startswith(("/api/users", "/api/audit")):
+        # 3. Admin-only endpoints: User management, Audit Log, Backup & Server/Group mutations
+        if path.startswith(("/api/users", "/api/audit", "/api/backup", "/api/known-hosts")):
             if role != "admin":
                 log_audit_event(
                     event_type="RBAC_ACCESS_DENIED",

@@ -333,14 +333,14 @@ def ssh_stats():
     def generate():
         ssh = None
         try:
-            # Connect
-            ssh, _ = connect_sftp(hostname, port, username, password, private_key=private_key)
+            # Connect SSH only (no unused SFTP subsystem channel)
+            ssh = connect_ssh_client(hostname, port, username, password, private_key=private_key)
             
-            # Stream stats every 2 seconds
+            # Stream stats every 3 seconds
             while True:
                 stats = get_system_stats(ssh)
                 yield f"data: {json.dumps(stats)}\n\n"
-                time.sleep(2)
+                time.sleep(3)
                 
         except GeneratorExit:
             # Client disconnected
@@ -697,4 +697,78 @@ def api_set_ui_prefs():
     data = request.get_json() or {}
     result = settings.set_ui_prefs(data)
     return jsonify(result)
+
+
+# --- Optional Backup & Restore API (Admin Only) ---
+
+@app.route('/api/backup/export', methods=['POST'])
+@role_required('admin')
+def api_backup_export():
+    from modules.notes.backend import _load_all as load_all_notes
+    from utils.sftp_helper import KNOWN_HOSTS_FILE
+
+    data = request.get_json(silent=True) or {}
+    passphrase = (data.get('passphrase') or '').strip()
+
+    notes = load_all_notes()
+    known_hosts_raw = ''
+    if os.path.exists(KNOWN_HOSTS_FILE):
+        try:
+            with open(KNOWN_HOSTS_FILE, 'r', encoding='utf-8') as f:
+                known_hosts_raw = f.read()
+        except OSError:
+            pass
+
+    bundle = settings.export_backup_bundle(
+        passphrase=passphrase,
+        notes=notes,
+        known_hosts_raw=known_hosts_raw
+    )
+    log_audit_event(
+        event_type='BACKUP_EXPORTED',
+        status='SUCCESS',
+        severity='NOTICE',
+        details={'encrypted': bool(passphrase), 'notes_count': len(notes)}
+    )
+    return jsonify(bundle)
+
+
+@app.route('/api/backup/import', methods=['POST'])
+@role_required('admin')
+def api_backup_import():
+    from modules.notes.backend import _save_all as save_all_notes
+    from utils.sftp_helper import KNOWN_HOSTS_FILE, DATA_DIR
+
+    data = request.get_json(silent=True) or {}
+    bundle = data.get('bundle')
+    passphrase = (data.get('passphrase') or '').strip()
+
+    try:
+        aux = settings.import_backup_bundle(bundle, passphrase=passphrase)
+        save_all_notes(aux.get('notes', []))
+        kh_raw = aux.get('known_hosts', '')
+        if kh_raw:
+            os.makedirs(DATA_DIR, exist_ok=True)
+            with open(KNOWN_HOSTS_FILE, 'w', encoding='utf-8') as f:
+                f.write(kh_raw)
+            try:
+                os.chmod(KNOWN_HOSTS_FILE, 0o600)
+            except OSError:
+                pass
+        log_audit_event(
+            event_type='BACKUP_RESTORED',
+            status='SUCCESS',
+            severity='WARNING',
+            details={'encrypted': bool(bundle and bundle.get('encrypted'))}
+        )
+        return jsonify({'success': True})
+    except ValueError as e:
+        log_audit_event(
+            event_type='BACKUP_RESTORED',
+            status='FAILURE',
+            severity='WARNING',
+            details={'error': str(e)}
+        )
+        return jsonify({'error': str(e)}), 400
+
 

@@ -132,7 +132,7 @@ See [MODULE_GUIDELINES.md](MODULE_GUIDELINES.md) for the complete development gu
 
 ## Status
 
-AMIKO is in early development (v0.5). The core architecture is functional, but the API surface and module contracts may change as the project evolves.
+AMIKO is in early development (v0.6). The core architecture is functional, but the API surface and module contracts may change as the project evolves.
 
 ## Roadmap to v1.0.0
 
@@ -152,25 +152,27 @@ AMIKO is in early development (v0.5). The core architecture is functional, but t
 - [x] Login rate-limiting & progressive brute-force lockout protection
 - [x] Asymmetric SSH key authentication (`Ed25519` / `RSA`) and strict `known_hosts` host-key verification
 - [x] Deprecate plain-text FTP in favor of encrypted SFTP-only transport
+- [x] Production transport hardening (Same-Origin CSRF/CSWSH protection, Content Security Policy & security headers, idle session timeout, encrypted Notes at rest)
 - [ ] Master Passphrase / OS Keyring integration for the encrypted vault (decoupling the encryption key from local disk)
-- [ ] Production transport hardening (strict CORS, CSRF tokens, Content Security Policy headers, local binding behind TLS reverse proxy)
 - [ ] Multi-Factor Authentication (TOTP / 2FA)
 
 ### Auditing, Operations & Resilience
 - [x] Structured immutable audit logging (SHA-256 hash chain) for authentication, configuration changes, and remote operations
+- [x] On-demand snapshot backup & restore (with optional PBKDF2-SHA256 + AES encryption)
 - [ ] Interactive SSH terminal session recording and forensic playback
-- [ ] Automated encrypted backups and disaster recovery tooling
 
 ### UI/UX
 - [x] Desktop-environment UI (top bar, sidebar dock, floating WinBox windows)
 - [x] GNOME style CPU/RAM/DISK monitor in top bar
 - [x] Live clock in top bar
 - [x] Connection panel as topbar popover
-- [ ] Settings panel improvements (export/import config, server management)
+- [x] Settings panel improvements (export/import config, server management)
 - [ ] Enhanced text editor in Explorer (syntax highlighting, search/replace)
 
 ### Performance
-- [x] SSH connection pool in Explorer (eliminates per-request handshake)
+- [x] Persistent SSH & SFTP subsystem channel pooling in Explorer (eliminates per-request handshake and subsystem spawn overhead)
+- [x] Stale-While-Revalidate in-memory directory cache, SFTP file prefetching, and batched `DocumentFragment` DOM rendering
+- [x] Single-channel combined `/proc/stat` telemetry for the topbar vitals monitor
 - [x] Debounced line-number rendering in the file editor
 - [x] AbortController for Explorer directory navigation
 

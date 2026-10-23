@@ -11,33 +11,63 @@ import uuid
 from datetime import datetime, timezone
 
 from flask import Blueprint, request, jsonify
+from core.config import settings
+from core.audit import log_audit_event
 
 blueprint = Blueprint('notes', __name__)
 
-# ── Storage ──────────────────────────────────────────────────────────
+# ── Encrypted Storage at Rest ────────────────────────────────────────
 
-NOTES_FILE = os.path.join(
+DATA_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-    'data', 'notes_data.json'
+    'data'
 )
+NOTES_ENC_FILE = os.path.join(DATA_DIR, 'notes_data.enc')
+LEGACY_NOTES_JSON_FILE = os.path.join(DATA_DIR, 'notes_data.json')
 
 
 def _load_all():
-    """Load all notes from disk."""
-    if not os.path.exists(NOTES_FILE):
-        return []
-    try:
-        with open(NOTES_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return []
+    """Load all notes from encrypted disk storage (migrating legacy plaintext JSON if present)."""
+    if os.path.exists(NOTES_ENC_FILE):
+        try:
+            with open(NOTES_ENC_FILE, 'rb') as f:
+                encrypted = f.read()
+            decrypted = settings._fernet.decrypt(encrypted)
+            data = json.loads(decrypted.decode('utf-8'))
+            return data if isinstance(data, list) else []
+        except Exception as e:
+            print(f"[AMIKO Notes] Error reading encrypted notes: {e}")
+            return []
+
+    # Transparent one-time migration from legacy plaintext notes_data.json
+    if os.path.exists(LEGACY_NOTES_JSON_FILE):
+        try:
+            with open(LEGACY_NOTES_JSON_FILE, 'r', encoding='utf-8') as f:
+                legacy_notes = json.load(f)
+            if isinstance(legacy_notes, list):
+                _save_all(legacy_notes)
+                try:
+                    os.remove(LEGACY_NOTES_JSON_FILE)
+                except OSError:
+                    pass
+                return legacy_notes
+        except (json.JSONDecodeError, IOError):
+            return []
+
+    return []
 
 
 def _save_all(notes):
-    """Persist notes to disk."""
-    os.makedirs(os.path.dirname(NOTES_FILE), exist_ok=True)
-    with open(NOTES_FILE, 'w', encoding='utf-8') as f:
-        json.dump(notes, f, indent=2, ensure_ascii=False)
+    """Persist notes encrypted at rest using AMIKO's Fernet vault cipher."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    raw = json.dumps(notes, indent=2, ensure_ascii=False).encode('utf-8')
+    encrypted = settings._fernet.encrypt(raw)
+    with open(NOTES_ENC_FILE, 'wb') as f:
+        f.write(encrypted)
+    try:
+        os.chmod(NOTES_ENC_FILE, 0o600)
+    except OSError:
+        pass
 
 
 # ── Visibility filter ────────────────────────────────────────────────
@@ -143,6 +173,13 @@ def create_note():
     notes = _load_all()
     notes.append(note)
     _save_all(notes)
+    log_audit_event(
+        event_type='NOTE_CREATED',
+        status='SUCCESS',
+        severity='INFO',
+        target={'hostname': hostname, 'note_id': note['id']},
+        details={'title': note['title']}
+    )
     return jsonify(note), 201
 
 
@@ -166,6 +203,13 @@ def update_note(note_id):
                 n['group_scope'] = data['group_scope']
             n['updated_at'] = datetime.now(timezone.utc).isoformat()
             _save_all(notes)
+            log_audit_event(
+                event_type='NOTE_UPDATED',
+                status='SUCCESS',
+                severity='INFO',
+                target={'hostname': n.get('hostname', ''), 'note_id': note_id},
+                details={'title': n.get('title', '')}
+            )
             return jsonify(n)
 
     return jsonify({'error': 'Note not found'}), 404
@@ -179,6 +223,12 @@ def delete_note(note_id):
     if len(filtered) == len(notes):
         return jsonify({'error': 'Note not found'}), 404
     _save_all(filtered)
+    log_audit_event(
+        event_type='NOTE_DELETED',
+        status='SUCCESS',
+        severity='NOTICE',
+        target={'note_id': note_id}
+    )
     return jsonify({'success': True})
 
 

@@ -13,9 +13,14 @@ class ExplorerModule {
         this.breadcrumb = container.querySelector('.mod-explorer-breadcrumb');
         this.pathInput = container.querySelector('.mod-explorer-path-input');
         this.btnGo = container.querySelector('.mod-explorer-btn-go');
+        this.btnUp = container.querySelector('.mod-explorer-btn-up');
+        this.btnRefresh = container.querySelector('.mod-explorer-btn-refresh');
         this.tbody = container.querySelector('.mod-explorer-tbody');
         this.loadingOverlay = container.querySelector('.mod-explorer-loading');
         this.crumbRoot = container.querySelector('.mod-explorer-crumb-root');
+
+        // In-memory directory cache for instant navigation (path -> entries JSON string)
+        this._dirCache = new Map();
 
         // Editor popup state
         this.editorPopup = null;
@@ -43,6 +48,21 @@ class ExplorerModule {
             });
         }
 
+        if (this.btnUp) {
+            this.btnUp.addEventListener('click', () => {
+                if (this.currentPath !== '/') {
+                    const parentPath = this.currentPath.replace(/\/[^/]+\/?$/, '') || '/';
+                    this.navigateTo(parentPath);
+                }
+            });
+        }
+
+        if (this.btnRefresh) {
+            this.btnRefresh.addEventListener('click', () => {
+                this.navigateTo(this.currentPath, true);
+            });
+        }
+
         if (this.pathInput) {
             this.pathInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
@@ -55,6 +75,38 @@ class ExplorerModule {
 
         if (this.crumbRoot) {
             this.crumbRoot.addEventListener('click', () => this.navigateTo('/'));
+        }
+
+        // Single delegated event listeners on tbody (eliminates 3*N per-row listeners)
+        if (this.tbody) {
+            this.tbody.addEventListener('click', (e) => {
+                const row = e.target.closest('tr');
+                if (!row) return;
+                if (row.dataset.parentNav === 'true') {
+                    const parentPath = this.currentPath.replace(/\/[^/]+\/?$/, '') || '/';
+                    this.navigateTo(parentPath);
+                    return;
+                }
+                if (row.dataset.entryName) {
+                    const prev = this.tbody.querySelector('tr.is-selected');
+                    if (prev && prev !== row) prev.classList.remove('is-selected');
+                    row.classList.add('is-selected');
+                }
+            });
+
+            this.tbody.addEventListener('dblclick', (e) => {
+                const row = e.target.closest('tr');
+                if (!row) return;
+                if (row.dataset.parentNav === 'true') {
+                    const parentPath = this.currentPath.replace(/\/[^/]+\/?$/, '') || '/';
+                    this.navigateTo(parentPath);
+                    return;
+                }
+                const entryName = row.dataset.entryName;
+                if (!entryName) return;
+                const entryIsDir = row.dataset.entryIsDir === 'true';
+                this._openEntry(entryName, entryIsDir);
+            });
         }
 
         // Grid span override removed in favor of fluid CSS Grid
@@ -82,10 +134,12 @@ class ExplorerModule {
     }
 
     onGlobalConnect() {
-        this.navigateTo('/');
+        this._dirCache.clear();
+        this.navigateTo('/', true);
     }
 
     onGlobalDisconnect() {
+        this._dirCache.clear();
         this.currentPath = '/';
         this.pathInput.value = '/';
         this.renderBreadcrumb('/');
@@ -134,7 +188,7 @@ class ExplorerModule {
     //  Directory Navigation
     // ──────────────────────────────────────
 
-    async navigateTo(path) {
+    async navigateTo(path, forceRefresh = false) {
         if (!window.globalConnection || !window.globalConnection.connected) {
             if (window.AmikoAlert) window.AmikoAlert('Error', 'You must connect first using the global connection form!');
             return;
@@ -150,7 +204,16 @@ class ExplorerModule {
         this._navAbortController = new AbortController();
         const signal = this._navAbortController.signal;
 
-        this.showLoading('⏳ Loading directory...');
+        // Instant Stale-While-Revalidate render if directory is cached
+        const cachedJson = !forceRefresh ? this._dirCache.get(path) : null;
+        if (cachedJson) {
+            this.currentPath = path;
+            this.pathInput.value = path;
+            this.renderBreadcrumb(path);
+            this.renderEntries(JSON.parse(cachedJson));
+        } else {
+            this.showLoading('⏳');
+        }
 
         const payload = this.buildPayload({ path: path });
         if (!payload) return;
@@ -165,16 +228,25 @@ class ExplorerModule {
             const data = await response.json();
 
             if (data.status === 'ok') {
-                this.currentPath = data.path;
-                this.pathInput.value = data.path;
-                this.renderBreadcrumb(data.path);
-                this.renderEntries(data.entries);
-            } else {
+                const freshJson = JSON.stringify(data.entries);
+                this._dirCache.set(data.path, freshJson);
+                // Cap cache at 50 directories
+                if (this._dirCache.size > 50) {
+                    const oldestKey = this._dirCache.keys().next().value;
+                    this._dirCache.delete(oldestKey);
+                }
+                if (!cachedJson || cachedJson !== freshJson || this.currentPath !== data.path) {
+                    this.currentPath = data.path;
+                    this.pathInput.value = data.path;
+                    this.renderBreadcrumb(data.path);
+                    this.renderEntries(data.entries);
+                }
+            } else if (!cachedJson) {
                 this.renderError(data.message || 'Unknown error.');
             }
         } catch (err) {
             if (err.name === 'AbortError') return; // Silently ignore cancelled requests
-            this.renderError('Network error: ' + err.message);
+            if (!cachedJson) this.renderError('Network error: ' + err.message);
         } finally {
             this.hideLoading();
         }
@@ -691,8 +763,9 @@ class ExplorerModule {
                 const data = await res.json();
 
                 if (data.status === 'ok') {
+                    this._dirCache.delete(this.currentPath);
                     // Refresh listing, then open the new file in the editor
-                    await this.navigateTo(this.currentPath);
+                    await this.navigateTo(this.currentPath, true);
                     this.openFile(fullPath);
                 } else {
                     if (window.AmikoAlert) window.AmikoAlert('Error', data.message || 'Cannot create file.', 'error');
@@ -725,7 +798,8 @@ class ExplorerModule {
                 const data = await res.json();
 
                 if (data.status === 'ok') {
-                    await this.navigateTo(this.currentPath);
+                    this._dirCache.delete(this.currentPath);
+                    await this.navigateTo(this.currentPath, true);
                 } else {
                     if (window.AmikoAlert) window.AmikoAlert('Error', data.message || 'Cannot create folder.', 'error');
                 }
@@ -753,7 +827,9 @@ class ExplorerModule {
                 });
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    await this.navigateTo(this.currentPath);
+                    this._dirCache.delete(this.currentPath);
+                    if (isDir) this._dirCache.delete(fullPath);
+                    await this.navigateTo(this.currentPath, true);
                 } else {
                     if (window.AmikoAlert) window.AmikoAlert('Error', data.message || 'Cannot delete.', 'error');
                 }
@@ -776,25 +852,21 @@ class ExplorerModule {
     }
 
     // ──────────────────────────────────────
-    //  File Listing Rendering
+    //  File Listing Rendering (Batched DOM)
     // ──────────────────────────────────────
 
     renderEntries(entries) {
-        this.tbody.innerHTML = '';
+        const frag = document.createDocumentFragment();
 
-        // Parent directory row (go up)
+        // Parent directory row (go up on single click or double click)
         if (this.currentPath !== '/') {
             const upRow = document.createElement('tr');
-            upRow.style.cssText = 'cursor: pointer; border-bottom: 1px solid var(--border-medium, rgba(255,255,255,0.05));';
+            upRow.className = 'mod-explorer-row';
+            upRow.dataset.parentNav = 'true';
             upRow.innerHTML = `
                 <td style="padding: 7px 12px; color: var(--text-primary);">📁 ..</td>
                 <td style="padding: 7px 12px; text-align: right; color: var(--text-dim);">—</td>`;
-            upRow.addEventListener('dblclick', () => {
-                const parentPath = this.currentPath.replace(/\/[^/]+\/?$/, '') || '/';
-                this.navigateTo(parentPath);
-            });
-            this.applyRowHover(upRow);
-            this.tbody.appendChild(upRow);
+            frag.appendChild(upRow);
         }
 
         if (entries.length === 0) {
@@ -803,54 +875,26 @@ class ExplorerModule {
                 <td colspan="2" style="padding: 20px 12px; text-align: center; opacity: 0.4;">
                     // Directory is empty
                 </td>`;
-            this.tbody.appendChild(emptyRow);
+            frag.appendChild(emptyRow);
+            this.tbody.replaceChildren(frag);
             return;
         }
 
-        entries.forEach(entry => {
+        for (let i = 0; i < entries.length; i++) {
+            const entry = entries[i];
             const row = document.createElement('tr');
-            row.style.cssText = 'cursor: pointer; border-bottom: 1px solid var(--border-medium, rgba(255,255,255,0.05));';
-
-            // Data attributes used by the context menu to identify the entry
+            row.className = 'mod-explorer-row';
             row.dataset.entryName  = entry.name;
             row.dataset.entryIsDir = entry.is_dir;
 
             const icon = entry.is_dir ? '📁' : '📄';
-
             row.innerHTML = `
                 <td style="padding: 7px 12px; color: var(--text-primary);">${icon} ${this.escapeHtml(entry.name)}</td>
                 <td style="padding: 7px 12px; text-align: right; color: var(--text-dim);">${entry.size_display}</td>`;
+            frag.appendChild(row);
+        }
 
-            row.addEventListener('dblclick', () => {
-                const fullPath = this.currentPath === '/'
-                    ? '/' + entry.name
-                    : this.currentPath + '/' + entry.name;
-
-                if (entry.is_dir) {
-                    this.navigateTo(fullPath);
-                } else {
-                    const ext = entry.name.split('.').pop().toLowerCase();
-                    const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico'];
-                    if (imageExts.includes(ext)) {
-                        this.openImage(fullPath, entry.name);
-                    } else {
-                        this.openFile(fullPath);
-                    }
-                }
-            });
-
-            this.applyRowHover(row);
-            this.tbody.appendChild(row);
-        });
-    }
-
-    applyRowHover(row) {
-        row.addEventListener('mouseenter', () => {
-            row.style.background = 'var(--glow-primary, rgba(255,255,255,0.05))';
-        });
-        row.addEventListener('mouseleave', () => {
-            row.style.background = 'transparent';
-        });
+        this.tbody.replaceChildren(frag);
     }
 
     renderBreadcrumb(path) {

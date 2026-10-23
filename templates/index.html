@@ -261,7 +261,7 @@
     <!-- BOTTOM BAR                                    -->
     <!-- ══════════════════════════════════════════════ -->
     <div class="bottom-bar" id="bottom-bar">
-        <span class="bottombar-brand">AMIKO v0.5</span>
+        <span class="bottombar-brand">AMIKO v0.6</span>
         <span class="bottombar-center"></span>
         <div class="bottombar-status">
             <span class="bottombar-dot" id="bottombarDot"></span>
@@ -518,7 +518,7 @@
                                 <span class="iface-pref-icon">🪟</span>
                                 <div>
                                     <div class="iface-pref-title">Window Buttons</div>
-                                    <div class="iface-pref-desc">Choose which control buttons appear on module windows (like GNOME). The close button is always present.</div>
+                                    <div class="iface-pref-desc">Choose which control buttons appear on module windows. The close button is always present.</div>
                                 </div>
                             </div>
                             <div class="iface-btn-toggles">
@@ -593,6 +593,25 @@
                         </div>
 
                         <button class="iface-save-btn" id="ifaceSaveBtn">💾 Save Interface Settings</button>
+
+                        {% if current_user.role == 'admin' %}
+                        <div class="iface-section-divider" style="margin-top: 24px;">Optional Backup &amp; Portability</div>
+                        <div class="iface-pref-group">
+                            <div class="iface-pref-header">
+                                <span class="iface-pref-icon">📦</span>
+                                <div>
+                                    <div class="iface-pref-title">On-Demand Snapshot (Export / Import)</div>
+                                    <div class="iface-pref-desc">Export or restore servers, groups, users, notes, and pinned SSH host keys. Enter a passphrase to encrypt the backup with PBKDF2-SHA256 + AES, or leave it blank if your VM/storage already encrypts backups.</div>
+                                </div>
+                            </div>
+                            <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:10px;">
+                                <input type="password" id="backupPassphrase" placeholder="Optional passphrase (for encrypted backup)" style="flex:1; min-width:220px; padding:8px 10px; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border); border-radius:4px; font-family:var(--font-mono); font-size:12px;">
+                                <button type="button" id="btnExportBackup" style="padding:8px 14px; background:var(--accent-highlight); color:#fff; border:none; border-radius:4px; cursor:pointer; font-family:var(--font-mono); font-size:12px;">⬇️ Export Backup</button>
+                                <button type="button" id="btnImportBackup" style="padding:8px 14px; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border); border-radius:4px; cursor:pointer; font-family:var(--font-mono); font-size:12px;">⬆️ Restore Backup</button>
+                                <input type="file" id="backupFileInput" accept=".json,.backup" style="display:none;">
+                            </div>
+                        </div>
+                        {% endif %}
                     </div>
 
                 </div>

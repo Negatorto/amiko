@@ -558,13 +558,8 @@ def execute_ssh_command(ssh, command):
 
 def get_system_stats(ssh):
     """
-    Get system statistics (CPU, RAM, Disk) via SSH.
-    
-    Args:
-        ssh: SSH client instance
-    
-    Returns:
-        dict: {'cpu': float, 'ram': float, 'disk': float, 'network': dict}
+    Get system statistics (CPU, RAM, Disk, Network) via a single combined SSH command
+    to minimize channel overhead and avoid blocking interactive SFTP/Explorer requests.
     """
     stats = {
         'cpu': 0.0,
@@ -572,58 +567,48 @@ def get_system_stats(ssh):
         'disk': 0.0,
         'network': {'rx': 0, 'tx': 0}
     }
-    
+
+    combined_cmd = (
+        "LC_ALL=C sh -c '"
+        "read _ a b c d e f g _ < /proc/stat; t1=$((a+b+c+d+e+f+g)); i1=$((d+e)); "
+        "sleep 0.1; "
+        "read _ a b c d e f g _ < /proc/stat; t2=$((a+b+c+d+e+f+g)); i2=$((d+e)); "
+        "dt=$((t2-t1)); di=$((i2-i1)); "
+        "if [ \"$dt\" -gt 0 ]; then awk \"BEGIN{printf \\\"CPU:%.1f\\\\n\\\", (($dt-$di)*100.0)/$dt}\"; else echo \"CPU:0.0\"; fi; "
+        "free | awk \"/^Mem:/{if(\\$2>0) printf \\\"RAM:%.1f\\\\n\\\", (\\$3*100.0)/\\$2}\"; "
+        "df -P / | awk \"NR==2{gsub(/%/,\\\"\\\",\\$5); printf \\\"DISK:%s\\\\n\\\", \\$5}\"; "
+        "awk \"NR>2 && \\$1!=\\\"lo:\\\"{rx+=\\$2; tx+=\\$10} END{printf \\\"NET:%d %d\\\\n\\\", rx, tx}\" /proc/net/dev"
+        "'"
+    )
+
     try:
-        # CPU usage (percentage)
-        cpu_cmd = "top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | sed 's/%us,//'"
-        result = execute_ssh_command(ssh, cpu_cmd)
-        if result['exit_code'] == 0 and result['stdout'].strip():
-            try:
-                stats['cpu'] = float(result['stdout'].strip().replace('%', '').replace(',', '.'))
-            except ValueError:
-                pass
-        
-        # RAM usage (percentage)
-        ram_cmd = "free | grep Mem | awk '{print ($3/$2) * 100.0}'"
-        result = execute_ssh_command(ssh, ram_cmd)
-        if result['exit_code'] == 0 and result['stdout'].strip():
-            try:
-                stats['ram'] = float(result['stdout'].strip())
-            except ValueError:
-                pass
-        
-        # Disk usage (percentage) - root partition
-        disk_cmd = "df -h / | tail -1 | awk '{print $5}' | sed 's/%//'"
-        result = execute_ssh_command(ssh, disk_cmd)
-        if result['exit_code'] == 0 and result['stdout'].strip():
-            try:
-                stats['disk'] = float(result['stdout'].strip())
-            except ValueError:
-                pass
-        
-        # Network stats (bytes)
-        # Read from /proc/net/dev for eth0 or fallback to first non-lo interface
-        net_cmd = "cat /proc/net/dev | awk 'NR>2 {print $1, $2, $10}'" # Interface, RX, TX
-        result = execute_ssh_command(ssh, net_cmd)
-        if result['exit_code'] == 0 and result['stdout'].strip():
-            lines = result['stdout'].strip().split('\n')
-            total_rx = 0
-            total_tx = 0
-            for line in lines:
-                parts = line.split()
-                if len(parts) >= 3:
-                    interface = parts[0].strip(':')
-                    if interface != 'lo':
+        result = execute_ssh_command(ssh, combined_cmd)
+        if result['exit_code'] == 0 and result['stdout']:
+            for line in result['stdout'].splitlines():
+                line = line.strip()
+                if line.startswith('CPU:'):
+                    try:
+                        stats['cpu'] = float(line[4:].strip())
+                    except ValueError:
+                        pass
+                elif line.startswith('RAM:'):
+                    try:
+                        stats['ram'] = float(line[4:].strip())
+                    except ValueError:
+                        pass
+                elif line.startswith('DISK:'):
+                    try:
+                        stats['disk'] = float(line[5:].strip())
+                    except ValueError:
+                        pass
+                elif line.startswith('NET:'):
+                    parts = line[4:].strip().split()
+                    if len(parts) == 2:
                         try:
-                            total_rx += int(parts[1])
-                            total_tx += int(parts[2])
+                            stats['network'] = {'rx': int(parts[0]), 'tx': int(parts[1])}
                         except ValueError:
                             pass
-            
-            stats['network'] = {'rx': total_rx, 'tx': total_tx}
-        
-    except Exception as e:
-        # Return default stats on error
+    except Exception:
         pass
-    
+
     return stats

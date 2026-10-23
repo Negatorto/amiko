@@ -4,9 +4,21 @@ from flask_socketio import emit, disconnect
 
 from core import socketio
 from core.config import ssh_sessions, settings
-from core.auth import get_current_user
+from core.auth import get_current_user, is_same_origin_request
 from core.audit import log_audit_event
 from utils.sftp_helper import connect_ssh_client
+
+
+@socketio.on('connect')
+def handle_socket_connect():
+    if not is_same_origin_request():
+        log_audit_event(
+            event_type='CSWSH_ORIGIN_BLOCKED',
+            status='DENIED',
+            severity='ALERT',
+            details={'origin': request.headers.get('Origin', ''), 'host': request.host}
+        )
+        return False
 
 def background_thread(sid, shell):
     """Reads from SSH shell and emits to socket"""

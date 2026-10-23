@@ -41,10 +41,10 @@ def _get_show_hidden() -> bool:
     except Exception:
         return False
 
-POOL_TTL = 120  # seconds — reuse SSH transport for up to 2 minutes
+POOL_TTL = 300  # seconds — keep pooled SSH + SFTP channel warm for 5 minutes
 
-# ─── SSH Connection Pool ───────────────────────────────────────────────────
-# Structure: { pool_key → { 'ssh': SSHClient, 'last_used': float } }
+# ─── SSH + Persistent SFTP Channel Pool ────────────────────────────────────
+# Structure: { pool_key → { 'ssh': SSHClient, 'sftp': SFTPClient, 'sftp_busy': bool, 'owns_ssh': bool, 'last_used': float } }
 _ssh_pool: dict = {}
 _pool_lock = threading.Lock()
 
@@ -55,10 +55,18 @@ def _pool_key(hostname: str, port: int, username: str, password: str) -> str:
     return f"{hostname}:{port}:{username}:{pw_hash}"
 
 
+def _is_sftp_alive(sftp) -> bool:
+    try:
+        return sftp is not None and sftp.sock is not None and not sftp.sock.closed
+    except Exception:
+        return False
+
+
 def _get_sftp(hostname: str, port: int, username: str, password: str):
     """
-    Return (ssh_client, sftp_client, from_pool).
-    Reuses an existing SSH transport when available; otherwise creates a new one.
+    Return (ssh_client, sftp_client, is_persistent_sftp).
+    Reuses BOTH the existing SSH transport AND the persistent SFTP subsystem channel
+    to eliminate per-request channel/process-spawn round-trips.
     """
     key = _pool_key(hostname, port, username, password)
 
@@ -68,43 +76,107 @@ def _get_sftp(hostname: str, port: int, username: str, password: str):
             try:
                 transport = entry['ssh'].get_transport()
                 if transport and transport.is_active():
-                    # Reuse transport — open a lightweight new SFTP channel
-                    sftp = entry['ssh'].open_sftp()
                     entry['last_used'] = time.time()
-                    return entry['ssh'], sftp, True  # from_pool=True
+                    # Fast path: reuse persistent SFTP channel if not currently in use
+                    if not entry.get('sftp_busy') and _is_sftp_alive(entry.get('sftp')):
+                        entry['sftp_busy'] = True
+                        return entry['ssh'], entry['sftp'], key
+                    # If persistent channel was closed, reopen and store it
+                    if not entry.get('sftp_busy'):
+                        sftp = entry['ssh'].open_sftp()
+                        entry['sftp'] = sftp
+                        entry['sftp_busy'] = True
+                        return entry['ssh'], sftp, key
+                    # Concurrent request while persistent SFTP is busy: open ephemeral SFTP channel
+                    return entry['ssh'], entry['ssh'].open_sftp(), None
             except Exception:
                 pass
             # Dead connection — remove and fall through to reconnect
             try:
-                entry['ssh'].close()
+                if entry.get('sftp'):
+                    entry['sftp'].close()
             except Exception:
                 pass
+            if entry.get('owns_ssh', True):
+                try:
+                    entry['ssh'].close()
+                except Exception:
+                    pass
             del _ssh_pool[key]
 
-    # No valid cached connection — create a new one
-    ssh, sftp = connect_sftp(hostname, port, username, password)
+    # Try to reuse the active SSH transport from the global session before opening a new TCP/SSH connection
+    reused_ssh = None
+    for s_data in list(_amiko_ssh_sessions.values()):
+        if (
+            s_data.get('hostname') == hostname
+            and int(s_data.get('port', 22)) == int(port)
+            and s_data.get('username') == username
+        ):
+            cand_ssh = s_data.get('ssh')
+            if cand_ssh:
+                t = cand_ssh.get_transport()
+                if t and t.is_active():
+                    reused_ssh = cand_ssh
+                    break
+
+    if reused_ssh is not None:
+        ssh = reused_ssh
+        t = ssh.get_transport()
+        if t:
+            t.set_keepalive(30)
+        sftp = ssh.open_sftp()
+        owns_ssh = False
+    else:
+        ssh, sftp = connect_sftp(hostname, port, username, password)
+        t = ssh.get_transport()
+        if t:
+            t.set_keepalive(30)
+        owns_ssh = True
 
     with _pool_lock:
-        _ssh_pool[key] = {'ssh': ssh, 'last_used': time.time()}
-        _cleanup_pool_locked()  # Evict stale entries while we hold the lock
+        _ssh_pool[key] = {
+            'ssh': ssh,
+            'sftp': sftp,
+            'sftp_busy': True,
+            'owns_ssh': owns_ssh,
+            'last_used': time.time()
+        }
+        _cleanup_pool_locked()
 
-    return ssh, sftp, False  # from_pool=False
+    return ssh, sftp, key
 
 
 def _cleanup_pool_locked():
     """Remove stale entries. Must be called while _pool_lock is held."""
     now = time.time()
-    dead = [k for k, v in _ssh_pool.items() if now - v['last_used'] > POOL_TTL]
+    dead = [k for k, v in _ssh_pool.items() if not v.get('sftp_busy') and now - v['last_used'] > POOL_TTL]
     for k in dead:
-        try:
-            _ssh_pool[k]['ssh'].close()
-        except Exception:
-            pass
-        del _ssh_pool[k]
+        entry = _ssh_pool.pop(k, None)
+        if entry:
+            try:
+                if entry.get('sftp'):
+                    entry['sftp'].close()
+            except Exception:
+                pass
+            if entry.get('owns_ssh', True):
+                try:
+                    entry['ssh'].close()
+                except Exception:
+                    pass
 
 
-def _release_sftp(sftp, from_pool: bool):
-    """Close only the SFTP channel — keep the SSH transport alive in the pool."""
+def _release_sftp(sftp, persistent_key):
+    """
+    If sftp is the pooled persistent SFTP channel, keep it open for instant reuse;
+    only close ephemeral overflow channels.
+    """
+    if persistent_key:
+        with _pool_lock:
+            entry = _ssh_pool.get(persistent_key)
+            if entry and entry.get('sftp') is sftp:
+                entry['sftp_busy'] = False
+                entry['last_used'] = time.time()
+                return
     try:
         if sftp:
             sftp.close()
@@ -119,9 +191,15 @@ def _invalidate_pool_entry(hostname: str, port: int, username: str, password: st
         entry = _ssh_pool.pop(key, None)
         if entry:
             try:
-                entry['ssh'].close()
+                if entry.get('sftp'):
+                    entry['sftp'].close()
             except Exception:
                 pass
+            if entry.get('owns_ssh', True):
+                try:
+                    entry['ssh'].close()
+                except Exception:
+                    pass
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────
@@ -215,11 +293,12 @@ def list_dir():
                 except IOError:
                     return jsonify({"status": "error", "message": f"Cannot access directory: {path}"}), 400
 
+                show_hidden = _get_show_hidden()
                 for attr in file_list:
                     name = attr.filename
                     if name in ('.', '..'):
                         continue
-                    if name.startswith('.') and not _get_show_hidden():
+                    if name.startswith('.') and not show_hidden:
                         continue
                     is_dir = stat.S_ISDIR(attr.st_mode) if attr.st_mode else False
                     size = attr.st_size or 0
@@ -294,7 +373,9 @@ def read_file():
                 if file_size > _get_max_file_size():
                     return jsonify({"status": "error", "message": f"File too large ({_format_size(file_size)}). Max: {_format_size(_get_max_file_size())}."}), 400
 
-                with sftp.open(path, 'r') as f:
+                with sftp.open(path, 'rb') as f:
+                    if file_size > 0:
+                        f.prefetch(file_size)
                     raw = f.read()
             except Exception:
                 _invalidate_pool_entry(hostname, port, username, password)
@@ -612,6 +693,8 @@ def read_image():
                     return jsonify({"status": "error", "message": f"Image too large ({_format_size(file_size)}). Max: {_format_size(_get_max_file_size())}."}), 400
 
                 with sftp.open(path, 'rb') as f:
+                    if file_size > 0:
+                        f.prefetch(file_size)
                     raw = f.read()
             except Exception:
                 _invalidate_pool_entry(hostname, port, username, password)

@@ -7,8 +7,10 @@ Uses Fernet (AES-128-CBC) symmetric encryption.
 import os
 import json
 import uuid
+import base64
+import hashlib
 from datetime import datetime, timezone
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from werkzeug.security import generate_password_hash, check_password_hash
 
 
@@ -551,3 +553,91 @@ class SettingsManager:
         self._settings["ui_prefs"] = current
         self._save()
         return current
+
+    # --- Optional Backup & Restore (Passphrase-Encrypted or Plain JSON) ---
+
+    @staticmethod
+    def _derive_backup_fernet(passphrase: str, salt: bytes) -> Fernet:
+        key_bytes = hashlib.pbkdf2_hmac(
+            "sha256",
+            passphrase.encode("utf-8"),
+            salt,
+            600000,
+            dklen=32
+        )
+        return Fernet(base64.urlsafe_b64encode(key_bytes))
+
+    def export_backup_bundle(self, passphrase: str = "", notes: list = None, known_hosts_raw: str = "") -> dict:
+        """
+        Create a portable backup snapshot of settings, servers, groups, users, notes, and known_hosts.
+        If passphrase is provided, the payload is encrypted with PBKDF2-HMAC-SHA256 + Fernet.
+        If passphrase is empty, the payload is exported as plain JSON (optional encryption).
+        """
+        now_iso = datetime.now(timezone.utc).isoformat()
+        payload = {
+            "settings": self._settings,
+            "notes": notes if isinstance(notes, list) else [],
+            "known_hosts": known_hosts_raw or ""
+        }
+        pw = (passphrase or "").strip()
+        if pw:
+            salt = os.urandom(16)
+            cipher = self._derive_backup_fernet(pw, salt)
+            raw_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            token = cipher.encrypt(raw_bytes).decode("ascii")
+            return {
+                "amiko_backup": True,
+                "version": "0.6",
+                "created_at": now_iso,
+                "encrypted": True,
+                "kdf": "PBKDF2-HMAC-SHA256-600000",
+                "salt": base64.b64encode(salt).decode("ascii"),
+                "ciphertext": token
+            }
+        return {
+            "amiko_backup": True,
+            "version": "0.6",
+            "created_at": now_iso,
+            "encrypted": False,
+            "data": payload
+        }
+
+    def import_backup_bundle(self, bundle: dict, passphrase: str = "") -> dict:
+        """
+        Restore a backup snapshot created by export_backup_bundle().
+        Returns {"notes": [...], "known_hosts": "..."} for caller to persist auxiliary stores.
+        """
+        if not isinstance(bundle, dict) or not bundle.get("amiko_backup"):
+            raise ValueError("Invalid AMIKO backup file format.")
+
+        if bundle.get("encrypted"):
+            pw = (passphrase or "").strip()
+            if not pw:
+                raise ValueError("This backup is encrypted. Please provide the backup passphrase.")
+            try:
+                salt = base64.b64decode(bundle["salt"])
+                cipher = self._derive_backup_fernet(pw, salt)
+                decrypted = cipher.decrypt(bundle["ciphertext"].encode("ascii"))
+                payload = json.loads(decrypted.decode("utf-8"))
+            except (InvalidToken, KeyError, ValueError, Exception):
+                raise ValueError("Decryption failed: invalid passphrase or corrupted backup file.")
+        else:
+            payload = bundle.get("data")
+            if not isinstance(payload, dict):
+                raise ValueError("Invalid backup payload.")
+
+        restored_settings = payload.get("settings")
+        if not isinstance(restored_settings, dict) or "servers" not in restored_settings:
+            raise ValueError("Backup is missing core settings structure.")
+
+        # Merge with defaults to ensure all keys exist
+        merged = dict(DEFAULT_SETTINGS)
+        merged.update(restored_settings)
+        self._settings = merged
+        self._ensure_default_admin()
+        self._save()
+
+        return {
+            "notes": payload.get("notes") if isinstance(payload.get("notes"), list) else [],
+            "known_hosts": payload.get("known_hosts") if isinstance(payload.get("known_hosts"), str) else ""
+        }
