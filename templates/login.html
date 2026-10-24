@@ -26,19 +26,37 @@
             border-radius: 8px;
             padding: 32px 28px;
             box-shadow: 0 12px 36px rgba(0, 0, 0, 0.25), 0 0 20px var(--glow-primary);
+            transition: max-width 0.25s ease;
+        }
+        .login-card.is-setup {
+            max-width: 460px;
         }
         .login-header {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            margin-bottom: 24px;
+            margin-bottom: 22px;
             text-align: center;
         }
         .login-logo {
             width: 100px;
             height: auto;
             filter: drop-shadow(0 0 6px var(--glow-primary));
+        }
+        .step-header {
+            margin-top: 10px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            color: var(--accent-highlight);
+            text-transform: uppercase;
+        }
+        .step-desc {
+            margin-top: 6px;
+            font-size: 11px;
+            line-height: 1.5;
+            color: var(--text-secondary);
         }
         .login-field {
             display: flex;
@@ -67,6 +85,12 @@
         .login-field input:focus {
             border-color: var(--accent-highlight);
             box-shadow: 0 0 0 2px var(--glow-primary);
+        }
+        .totp-input {
+            text-align: center;
+            letter-spacing: 4px;
+            font-size: 18px !important;
+            font-weight: 700;
         }
         .login-error {
             display: none;
@@ -99,6 +123,105 @@
             opacity: 0.5;
             cursor: not-allowed;
         }
+        .login-secondary-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            padding: 9px;
+            width: 100%;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            letter-spacing: 1px;
+            margin-top: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .login-secondary-btn:hover {
+            color: var(--text-primary);
+            border-color: var(--text-primary);
+            background: var(--bg-primary);
+        }
+        .totp-qr-container {
+            display: flex;
+            justify-content: center;
+            margin: 14px 0;
+        }
+        .totp-qr-box {
+            background: #ffffff;
+            padding: 10px;
+            border-radius: 6px;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+            display: inline-flex;
+        }
+        .totp-qr-img {
+            width: 165px;
+            height: 165px;
+            display: block;
+        }
+        .totp-secret-box {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 7px 10px;
+            background: var(--bg-primary);
+            border: 1px dashed var(--border);
+            border-radius: 4px;
+            font-size: 11px;
+            margin-bottom: 14px;
+        }
+        .totp-secret-text {
+            word-break: break-all;
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+        .totp-copy-btn {
+            padding: 4px 8px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            font-size: 10px;
+            font-family: var(--font-mono);
+            cursor: pointer;
+            border-radius: 3px;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .totp-copy-btn:hover {
+            border-color: var(--accent-highlight);
+            color: var(--accent-highlight);
+        }
+        .totp-recovery-wrapper {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 16px;
+            font-size: 11px;
+        }
+        .totp-recovery-title {
+            font-weight: 700;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        .totp-recovery-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+            font-family: var(--font-mono);
+            font-weight: 700;
+            color: var(--accent-highlight);
+            margin-bottom: 8px;
+        }
+        .totp-recovery-item {
+            background: var(--bg-secondary);
+            padding: 4px 6px;
+            border-radius: 3px;
+            text-align: center;
+            letter-spacing: 1px;
+            border: 1px solid var(--border);
+        }
         .login-footer {
             margin-top: 20px;
             padding-top: 14px;
@@ -110,13 +233,16 @@
     </style>
 </head>
 <body class="login-body">
-    <div class="login-card">
+    <div class="login-card" id="loginCard">
         <div class="login-header">
             <img src="{{ url_for('static', filename='img/AMIKO.svg') }}" alt="AMIKO" class="login-logo">
+            <div id="stepHeader" class="step-header" style="display:none;"></div>
+            <div id="stepDesc" class="step-desc" style="display:none;"></div>
         </div>
 
         <div class="login-error" id="loginError"></div>
 
+        <!-- STEP 1: CREDENTIALS FORM -->
         <form id="loginForm">
             <div class="login-field">
                 <label for="loginUsername">Username</label>
@@ -127,6 +253,38 @@
                 <input type="password" id="loginPassword" name="password" placeholder="••••••••" autocomplete="current-password" required>
             </div>
             <button type="submit" class="login-btn" id="loginSubmitBtn">SIGN IN</button>
+        </form>
+
+        <!-- STEP 2: 2FA FORM (VERIFY OR SETUP) -->
+        <form id="totpForm" style="display: none;">
+            <!-- Setup container (QR code + secret + recovery codes) -->
+            <div id="totpSetupContainer" style="display: none;">
+                <div class="totp-qr-container">
+                    <div class="totp-qr-box">
+                        <img id="totpQrImg" class="totp-qr-img" alt="Google Authenticator QR Code">
+                    </div>
+                </div>
+
+                <div class="totp-secret-box">
+                    <span id="totpSecretText" class="totp-secret-text"></span>
+                    <button type="button" id="copySecretBtn" class="totp-copy-btn">COPIA CHIAVE</button>
+                </div>
+
+                <div class="totp-recovery-wrapper">
+                    <div class="totp-recovery-title">Codici di recupero di emergenza (salvali ora):</div>
+                    <div class="totp-recovery-grid" id="totpRecoveryList"></div>
+                    <button type="button" id="copyRecoveryBtn" class="totp-copy-btn" style="width:100%;">COPIA TUTTI I CODICI</button>
+                </div>
+            </div>
+
+            <!-- 6-digit TOTP / recovery code input -->
+            <div class="login-field">
+                <label for="totpToken" id="totpTokenLabel">Codice a 6 cifre</label>
+                <input type="text" id="totpToken" class="totp-input" maxlength="10" placeholder="000 000" inputmode="numeric" autocomplete="one-time-code" required>
+            </div>
+
+            <button type="submit" class="login-btn" id="totpSubmitBtn">VERIFICA</button>
+            <button type="button" class="login-secondary-btn" id="totpBackBtn">← TORNA AL LOGIN</button>
         </form>
 
         <div class="login-footer">
@@ -147,15 +305,116 @@
             })
             .catch(() => {});
 
-        const form = document.getElementById('loginForm');
+        const loginCard = document.getElementById('loginCard');
+        const loginForm = document.getElementById('loginForm');
+        const totpForm = document.getElementById('totpForm');
         const errBox = document.getElementById('loginError');
-        const btn = document.getElementById('loginSubmitBtn');
+        const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+        const totpSubmitBtn = document.getElementById('totpSubmitBtn');
+        const totpBackBtn = document.getElementById('totpBackBtn');
+        const stepHeader = document.getElementById('stepHeader');
+        const stepDesc = document.getElementById('stepDesc');
+        const totpSetupContainer = document.getElementById('totpSetupContainer');
+        const totpQrImg = document.getElementById('totpQrImg');
+        const totpSecretText = document.getElementById('totpSecretText');
+        const totpRecoveryList = document.getElementById('totpRecoveryList');
+        const totpToken = document.getElementById('totpToken');
+        const totpTokenLabel = document.getElementById('totpTokenLabel');
+        const copySecretBtn = document.getElementById('copySecretBtn');
+        const copyRecoveryBtn = document.getElementById('copyRecoveryBtn');
 
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
+        let currentRecoveryCodes = [];
+
+        function showError(msg) {
+            errBox.textContent = msg;
+            errBox.style.display = 'block';
+        }
+
+        function hideError() {
             errBox.style.display = 'none';
-            btn.disabled = true;
-            btn.textContent = 'AUTHENTICATING...';
+            errBox.textContent = '';
+        }
+
+        function showStep1() {
+            hideError();
+            loginCard.classList.remove('is-setup');
+            loginForm.style.display = 'block';
+            totpForm.style.display = 'none';
+            stepHeader.style.display = 'none';
+            stepDesc.style.display = 'none';
+            loginSubmitBtn.disabled = false;
+            loginSubmitBtn.textContent = 'SIGN IN';
+            document.getElementById('loginUsername').focus();
+        }
+
+        function showStep2(data) {
+            hideError();
+            loginForm.style.display = 'none';
+            totpForm.style.display = 'block';
+            stepHeader.style.display = 'block';
+            stepDesc.style.display = 'block';
+            totpToken.value = '';
+
+            if (data.setup_2fa) {
+                // Setup flow: show QR code, secret, recovery codes
+                loginCard.classList.add('is-setup');
+                stepHeader.textContent = 'CONFIGURAZIONE 2FA';
+                stepDesc.textContent = `Abbinamento Google Authenticator per l'utente "${data.username}". Scansiona il QR code o inserisci manualmente la chiave:`;
+                totpSetupContainer.style.display = 'block';
+                totpQrImg.src = data.qr_data_url;
+                totpSecretText.textContent = data.secret;
+                currentRecoveryCodes = data.recovery_codes || [];
+
+                totpRecoveryList.innerHTML = currentRecoveryCodes.map(c => `
+                    <div class="totp-recovery-item">${c}</div>
+                `).join('');
+
+                totpTokenLabel.textContent = 'Codice di verifica app (6 cifre)';
+                totpSubmitBtn.textContent = 'CONFERMA E ACCEDI';
+            } else {
+                // Standard login challenge
+                loginCard.classList.remove('is-setup');
+                stepHeader.textContent = 'VERIFICA 2FA';
+                stepDesc.textContent = `Inserisci il codice a 6 cifre da Google Authenticator per continuare come "${data.username}".`;
+                totpSetupContainer.style.display = 'none';
+                totpTokenLabel.textContent = 'Codice a 6 cifre o Codice di Recupero';
+                totpSubmitBtn.textContent = 'VERIFICA E ACCEDI';
+            }
+
+            totpToken.focus();
+        }
+
+        // Copy secret key button
+        copySecretBtn.addEventListener('click', () => {
+            const secret = totpSecretText.textContent;
+            navigator.clipboard.writeText(secret).then(() => {
+                const orig = copySecretBtn.textContent;
+                copySecretBtn.textContent = 'COPIATO!';
+                setTimeout(() => copySecretBtn.textContent = orig, 1800);
+            });
+        });
+
+        // Copy recovery codes button
+        copyRecoveryBtn.addEventListener('click', () => {
+            const txt = currentRecoveryCodes.join('\n');
+            navigator.clipboard.writeText(txt).then(() => {
+                const orig = copyRecoveryBtn.textContent;
+                copyRecoveryBtn.textContent = 'CODICI COPIATI!';
+                setTimeout(() => copyRecoveryBtn.textContent = orig, 1800);
+            });
+        });
+
+        // Back to step 1
+        totpBackBtn.addEventListener('click', () => {
+            showStep1();
+        });
+
+        // Step 1: Submit username + password
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideError();
+            loginSubmitBtn.disabled = true;
+            loginSubmitBtn.textContent = 'AUTHENTICATING...';
 
             const username = document.getElementById('loginUsername').value.trim();
             const password = document.getElementById('loginPassword').value;
@@ -173,23 +432,70 @@
                 } catch (_) {
                     throw new Error(`Server error (${res.status}).`);
                 }
+
+                if (data.requires_2fa) {
+                    showStep2(data);
+                    return;
+                }
+
                 if (res.ok && data.success) {
                     sessionStorage.removeItem('globalConnection');
                     window.location.href = '/';
                 } else {
-                    errBox.textContent = data.error || 'Authentication failed';
-                    errBox.style.display = 'block';
-                    btn.disabled = false;
-                    btn.textContent = 'SIGN IN';
+                    showError(data.error || 'Authentication failed');
+                    loginSubmitBtn.disabled = false;
+                    loginSubmitBtn.textContent = 'SIGN IN';
                 }
             } catch (err) {
-                errBox.textContent = err.message || 'Network error while signing in.';
-                errBox.style.display = 'block';
-                btn.disabled = false;
-                btn.textContent = 'SIGN IN';
+                showError(err.message || 'Network error while signing in.');
+                loginSubmitBtn.disabled = false;
+                loginSubmitBtn.textContent = 'SIGN IN';
+            }
+        });
+
+        // Step 2: Submit 2FA code / recovery code
+        totpForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideError();
+            totpSubmitBtn.disabled = true;
+            totpSubmitBtn.textContent = 'VERIFICANDO...';
+
+            const token = totpToken.value.trim().replace(/\s+/g, '');
+
+            try {
+                const res = await fetch('/api/auth/2fa/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token, code: token })
+                });
+                const text = await res.text();
+                let data = {};
+                try {
+                    data = JSON.parse(text);
+                } catch (_) {
+                    throw new Error(`Server error (${res.status}).`);
+                }
+
+                if (res.ok && data.success) {
+                    sessionStorage.removeItem('globalConnection');
+                    window.location.href = '/';
+                } else {
+                    if (data.expired) {
+                        showStep1();
+                        showError('Sessione di verifica scaduta. Effettua nuovamente il login.');
+                    } else {
+                        showError(data.error || 'Codice non valido. Riprova.');
+                        totpSubmitBtn.disabled = false;
+                        totpSubmitBtn.textContent = totpSetupContainer.style.display === 'block' ? 'CONFERMA E ACCEDI' : 'VERIFICA E ACCEDI';
+                        totpToken.select();
+                    }
+                }
+            } catch (err) {
+                showError(err.message || 'Errore di rete durante la verifica del codice.');
+                totpSubmitBtn.disabled = false;
+                totpSubmitBtn.textContent = totpSetupContainer.style.display === 'block' ? 'CONFERMA E ACCEDI' : 'VERIFICA E ACCEDI';
             }
         });
     </script>
 </body>
 </html>
-

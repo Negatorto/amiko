@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="static/img/AMIKO.png?v=0.6.2" alt="AMIKO Logo" width="230">
+  <img src="static/img/AMIKO.png?v=0.6.3" alt="AMIKO Logo" width="230">
 </p>
 
-# AMIKO v0.6.2
+# AMIKO v0.6.3
 
 
 **Advanced Multi-function Interface Kit for Operations**
@@ -71,6 +71,23 @@ python3 app.py
 The server will start at `http://localhost:5423`.
 
 > **Default Login**: On first startup, AMIKO creates a default administrator account (`admin` / `admin`). You can change the password and manage `admin`, `operator`, and `viewer` accounts in **Settings → Users**.
+
+### Two-Factor Authentication (2FA / TOTP)
+
+AMIKO includes per-user Two-Factor Authentication compatible with **Google Authenticator**, Authy, and any standard RFC 6238 TOTP app:
+
+- **First Login & Pairing**: When a user signs in for the first time (or after an admin reset), AMIKO presents a setup screen with a pairing QR code, manual secret key, and 5 single-use emergency recovery codes. Entering the first 6-digit code confirms pairing and activates 2FA.
+- **Subsequent Logins**: Users enter their username and password, followed by the dynamic 6-digit code from Google Authenticator (or an emergency recovery code).
+- **Admin Management**: Administrators can view 2FA status for all accounts and reset 2FA registration for any user in **Settings → Users**.
+- **CLI Emergency Rescue Tool**: If an administrator or user loses access to their authenticator device, server operators can reset 2FA directly from the server terminal:
+  ```bash
+  # Check 2FA status for all users
+  python3 utils/reset_2fa.py --list
+
+  # Reset 2FA for a specific user
+  python3 utils/reset_2fa.py <username>
+  ```
+  After reset, the user will be prompted to scan a new QR code on their next login.
 
 ## Project Structure
 
@@ -142,7 +159,7 @@ AMIKO is in early development (v0.6). The core architecture is functional, but t
 - [x] Migrate inline styles from `index.html` to CSS
 - [x] Standardize all modules icons to SVG format
 - [x] Add favicon
-- [ ] Self-host all third-party frontend libraries (`static/lib/`) to remove external CDN dependencies
+- [x] Self-host all third-party frontend libraries (`static/lib/`) to remove external CDN dependencies
 - [ ] Module permission manifests (`module.json`) and plugin integrity verification
 
 ### Security & Access Control
@@ -154,12 +171,14 @@ AMIKO is in early development (v0.6). The core architecture is functional, but t
 - [x] Deprecate plain-text FTP in favor of encrypted SFTP-only transport
 - [x] Production transport hardening (Same-Origin CSRF/CSWSH protection, Content Security Policy & security headers, idle session timeout, encrypted Notes at rest)
 - [ ] Master Passphrase / OS Keyring integration for the encrypted vault (decoupling the encryption key from local disk)
-- [ ] Multi-Factor Authentication (TOTP / 2FA)
+- [x] Multi-Factor Authentication (TOTP / 2FA with Google Authenticator, Emergency Recovery Codes, and Admin/CLI reset)
+- [ ] Firewall & Fail2ban integration (anti-intrusion ban and brute-force protection)
 
 ### Auditing, Operations & Resilience
 - [x] Structured immutable audit logging (SHA-256 hash chain) for authentication, configuration changes, and remote operations
 - [x] On-demand snapshot backup & restore (with optional PBKDF2-SHA256 + AES encryption)
 - [ ] Interactive SSH terminal session recording and forensic playback
+- [ ] SMTP server configuration for security alerts and automated notification emails
 
 ### UI/UX
 - [x] Desktop-environment UI (top bar, sidebar dock, floating WinBox windows)

@@ -1255,3 +1255,33 @@ html.no-animations *::after {
     flex-direction: column;
     gap: 8px;
 }
+
+/* 2FA Badges & Actions */
+.badge-2fa {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    user-select: none;
+}
+
+.badge-2fa-active {
+    background: rgba(46, 204, 113, 0.15);
+    color: #2ecc71;
+    border: 1px solid rgba(46, 204, 113, 0.45);
+}
+
+.badge-2fa-pending {
+    background: rgba(230, 126, 34, 0.15);
+    color: #e67e22;
+    border: 1px solid rgba(230, 126, 34, 0.45);
+}
+
+.btn-reset-2fa:hover {
+    border-color: #e67e22 !important;
+    color: #e67e22 !important;
+}

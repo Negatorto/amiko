@@ -85,13 +85,138 @@ def api_auth_login():
 
     record_login_attempt(username, source_ip, success=True)
     session.clear()
-    session['user_id'] = user['id']
+
+    # Check Two-Factor Authentication (TOTP) status
+    raw_user = settings.get_user_by_id(user['id'], safe=False)
+    totp_enabled = bool(raw_user and raw_user.get('totp_enabled'))
+
+    if totp_enabled:
+        # Prompt user for their active 6-digit TOTP code
+        session['pending_2fa'] = {
+            'user_id': user['id'],
+            'username': user['username'],
+            'setup': False,
+            'expires_at': time.time() + 300
+        }
+        log_audit_event(
+            event_type='AUTH_2FA_CHALLENGE',
+            status='SUCCESS',
+            severity='INFO',
+            actor={'user_id': user['id'], 'username': user['username'], 'role': user['role'], 'source_ip': source_ip},
+            details={'setup': False}
+        )
+        return jsonify({
+            'success': False,
+            'requires_2fa': True,
+            'setup_2fa': False,
+            'username': user['username']
+        })
+
+    # First access or reset: initiate TOTP enrollment with QR code & recovery codes
+    setup_data = settings.init_user_totp_setup(user['id'])
+    session['pending_2fa'] = {
+        'user_id': user['id'],
+        'username': user['username'],
+        'setup': True,
+        'expires_at': time.time() + 600
+    }
+    log_audit_event(
+        event_type='AUTH_2FA_CHALLENGE',
+        status='SUCCESS',
+        severity='INFO',
+        actor={'user_id': user['id'], 'username': user['username'], 'role': user['role'], 'source_ip': source_ip},
+        details={'setup': True}
+    )
+    return jsonify({
+        'success': False,
+        'requires_2fa': True,
+        'setup_2fa': True,
+        'username': user['username'],
+        'secret': setup_data['secret'],
+        'otpauth_uri': setup_data['otpauth_uri'],
+        'qr_data_url': setup_data['qr_data_url'],
+        'recovery_codes': setup_data['recovery_codes']
+    })
+
+
+@app.route('/api/auth/2fa/verify', methods=['POST'])
+def api_auth_2fa_verify():
+    pending = session.get('pending_2fa')
+    if not pending or time.time() > pending.get('expires_at', 0):
+        session.pop('pending_2fa', None)
+        return jsonify({
+            'success': False,
+            'error': '2FA verification window expired. Please sign in again.',
+            'expired': True
+        }), 401
+
+    data = request.get_json(silent=True) or {}
+    code = (data.get('token') or data.get('code') or '').strip()
+    if not code:
+        return jsonify({'success': False, 'error': 'Verification code is required.'}), 400
+
+    user_id = pending['user_id']
+    username = pending['username']
+    source_ip = (
+        request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
+        or request.remote_addr
+        or 'unknown'
+    )
+
+    if pending.get('setup'):
+        # Onboarding confirmation
+        ok = settings.confirm_user_totp(user_id, code)
+        if not ok:
+            log_audit_event(
+                event_type='2FA_SETUP_FAILED',
+                status='FAILURE',
+                severity='WARNING',
+                actor={'user_id': user_id, 'username': username, 'source_ip': source_ip},
+                details={'reason': 'Invalid confirmation code during setup'}
+            )
+            return jsonify({'success': False, 'error': 'Invalid code. Check your app and try again.'}), 400
+
+        log_audit_event(
+            event_type='2FA_ENROLLED',
+            status='SUCCESS',
+            severity='NOTICE',
+            actor={'user_id': user_id, 'username': username, 'source_ip': source_ip},
+            details={'method': 'TOTP'}
+        )
+    else:
+        # Standard login verification
+        ok, method = settings.verify_user_totp(user_id, code)
+        if not ok:
+            log_audit_event(
+                event_type='AUTH_2FA_FAILED',
+                status='FAILURE',
+                severity='WARNING',
+                actor={'user_id': user_id, 'username': username, 'source_ip': source_ip},
+                details={'reason': 'Invalid 2FA code or recovery code'}
+            )
+            return jsonify({'success': False, 'error': 'Invalid code. Please try again.'}), 401
+
+        if method == 'recovery_code':
+            log_audit_event(
+                event_type='2FA_RECOVERY_CODE_USED',
+                status='SUCCESS',
+                severity='NOTICE',
+                actor={'user_id': user_id, 'username': username, 'source_ip': source_ip}
+            )
+
+    # 2FA succeeded: establish authenticated session
+    session.clear()
+    session['user_id'] = user_id
+    session['last_activity'] = time.time()
+    user = settings.get_user_by_id(user_id, safe=True)
     current = get_current_user()
+
     log_audit_event(
         event_type='AUTH_LOGIN_SUCCESS',
         status='SUCCESS',
         severity='INFO',
-        actor={'user_id': user['id'], 'username': user['username'], 'role': user['role'], 'source_ip': source_ip}
+        actor={'user_id': user_id, 'username': username, 'role': user['role'], 'source_ip': source_ip},
+        details={'2fa_verified': True}
     )
     return jsonify({'success': True, 'user': current})
 
@@ -448,6 +573,30 @@ def api_delete_user(user_id):
         return jsonify({'success': True})
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/users/<user_id>/reset-2fa', methods=['POST', 'PUT'])
+@role_required('admin')
+def api_reset_user_2fa(user_id):
+    target_user = settings.get_user_by_id(user_id, safe=True)
+    if not target_user:
+        return jsonify({'error': 'User not found'}), 404
+
+    ok = settings.reset_user_totp(user_id)
+    if not ok:
+        return jsonify({'error': 'Failed to reset 2FA for user'}), 400
+
+    log_audit_event(
+        event_type='2FA_RESET',
+        status='SUCCESS',
+        severity='WARNING',
+        target={'resource': f"user:{target_user['username']}", 'user_id': user_id},
+        details={'initiated_by': 'admin_ui'}
+    )
+    return jsonify({
+        'success': True,
+        'message': f"2FA reset successfully for {target_user['username']}."
+    })
 
 
 # --- Audit Log API (Admin Only) ---

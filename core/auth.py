@@ -148,9 +148,9 @@ def init_auth(app):
                 "success": False
             }), 403
 
-        # 1. Public endpoints (login page, login API, static assets, read-only theme init)
+        # 1. Public endpoints (login page, login API, 2FA challenge, static assets, read-only theme init)
         if (
-            path in ("/login", "/api/auth/login", "/favicon.svg")
+            path in ("/login", "/api/auth/login", "/api/auth/2fa/verify", "/favicon.svg")
             or path.startswith("/static/")
             or (path == "/api/themes" and request.method == "GET")
         ):

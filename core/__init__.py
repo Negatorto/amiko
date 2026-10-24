@@ -33,11 +33,11 @@ def apply_security_headers(response):
     response.headers.setdefault(
         'Content-Security-Policy',
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: blob:; "
-        "font-src 'self' data: https://cdn.jsdelivr.net; "
-        "connect-src 'self' ws: wss: https://cdn.jsdelivr.net; "
+        "font-src 'self' data:; "
+        "connect-src 'self' ws: wss:; "
         "frame-ancestors 'none';"
     )
     if app.config.get('SESSION_COOKIE_SECURE'):

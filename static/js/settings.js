@@ -236,6 +236,9 @@ class SettingsPanel {
         container.innerHTML = users.map(u => {
             const isSelf = u.id === currentUserId;
             const isAdmin = u.role === 'admin';
+            const totpBadge = u.totp_enabled
+                ? `<span class="badge-2fa badge-2fa-active" title="2FA Configurato (Google Authenticator)"><svg class="md-icon" style="width:12px;height:12px;"><use href="#md-shield"></use></svg> 2FA Attivo</span>`
+                : `<span class="badge-2fa badge-2fa-pending" title="2FA Non ancora configurato (verrà richiesto al prossimo accesso)"><svg class="md-icon" style="width:12px;height:12px;"><use href="#md-phonelink-lock"></use></svg> 2FA Da Associare</span>`;
             const groupChips = isAdmin
                 ? `<span class="user-assigned-chip all-groups" style="display:inline-flex; align-items:center; gap:4px;"><svg class="md-icon"><use href="#md-public"></use></svg> All Server Groups</span>`
                 : (u.allowed_groups && u.allowed_groups.length > 0
@@ -251,16 +254,46 @@ class SettingsPanel {
                     <div class="group-card-info" style="flex-wrap:wrap; gap:8px;">
                         <span class="group-card-name" style="display:inline-flex; align-items:center; gap:5px;"><svg class="md-icon"><use href="#md-person"></use></svg> ${this.escapeHtml(u.username)} ${isSelf ? '<em style="font-size:11px; color:var(--text-dim);">(you)</em>' : ''}</span>
                         <span class="topbar-role-badge role-${u.role}">${u.role.toUpperCase()}</span>
+                        ${totpBadge}
                         <div class="user-assigned-groups">${groupChips}</div>
                     </div>
                     <div class="group-card-actions">
                         <button class="btn-edit-user" title="Edit Role & Assigned Groups" data-id="${u.id}"><svg class="md-icon"><use href="#md-shield"></use></svg></button>
                         <button class="btn-pass-user" title="Reset Password" data-id="${u.id}" data-username="${this.escapeAttr(u.username)}"><svg class="md-icon"><use href="#md-key"></use></svg></button>
+                        <button class="btn-reset-2fa" title="Reset 2FA (Reimposta associazione Google Authenticator)" data-id="${u.id}" data-username="${this.escapeAttr(u.username)}"><svg class="md-icon"><use href="#md-phonelink-lock"></use></svg></button>
                         ${!isSelf ? `<button class="btn-delete-user btn-delete" title="Delete User" data-id="${u.id}" data-username="${this.escapeAttr(u.username)}"><svg class="md-icon"><use href="#md-delete"></use></svg></button>` : ''}
                     </div>
                 </div>
             `;
         }).join('');
+
+        container.querySelectorAll('.btn-reset-2fa').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const uid = btn.dataset.id;
+                const uname = btn.dataset.username;
+                const doReset2FA = async () => {
+                    const r = await this.api('POST', `/api/users/${uid}/reset-2fa`);
+                    if (r.error) {
+                        if (window.AmikoAlert) window.AmikoAlert('Errore', r.error);
+                        else alert(r.error);
+                    } else {
+                        if (window.AmikoAlert) window.AmikoAlert('2FA Resettato', `La configurazione 2FA per "${uname}" è stata rimossa. Al prossimo accesso l'utente riceverà un nuovo codice QR da abbinare a Google Authenticator.`);
+                        else alert(`2FA resettato per "${uname}".`);
+                        this.loadUsers();
+                    }
+                };
+
+                if (window.AmikoConfirm) {
+                    window.AmikoConfirm(
+                        'Reset 2FA (Google Authenticator)',
+                        `Vuoi resettare l'autenticazione a due fattori per l'utente "${uname}"? Al prossimo accesso dovrà scansionare un nuovo codice QR per abbinare la propria app.`,
+                        doReset2FA
+                    );
+                } else if (confirm(`Resettare 2FA per l'utente "${uname}"?`)) {
+                    doReset2FA();
+                }
+            });
+        });
 
         container.querySelectorAll('.btn-pass-user').forEach(btn => {
             btn.addEventListener('click', () => {

@@ -9,9 +9,14 @@ import json
 import uuid
 import base64
 import hashlib
+import io
+import secrets
 from datetime import datetime, timezone
 from cryptography.fernet import Fernet, InvalidToken
 from werkzeug.security import generate_password_hash, check_password_hash
+import pyotp
+import qrcode
+import qrcode.image.svg
 
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
@@ -105,7 +110,18 @@ class SettingsManager:
     def _sanitize_user(user):
         if not user:
             return None
-        return {k: v for k, v in user.items() if k != "password_hash"}
+        sanitized = {
+            k: v for k, v in user.items()
+            if k not in (
+                "password_hash",
+                "totp_secret",
+                "totp_recovery_codes",
+                "pending_totp_secret",
+                "pending_recovery_codes"
+            )
+        }
+        sanitized["totp_enabled"] = bool(user.get("totp_enabled", False))
+        return sanitized
 
     def get_users(self, safe=True):
         users = self._settings.get("users", [])
@@ -209,6 +225,141 @@ class SettingsManager:
                 raise ValueError("Cannot delete the last remaining admin user.")
 
         self._settings["users"] = [u for u in users if u["id"] != user_id]
+        self._save()
+        return True
+
+    # --- Two-Factor Authentication (2FA / TOTP RFC 6238) ---
+
+    def init_user_totp_setup(self, user_id):
+        """
+        Prepare 2FA enrollment for a user.
+        Generates or reuses a pending TOTP secret, a standard otpauth URI,
+        a crisp SVG QR Code for Google Authenticator, and 5 one-time emergency recovery codes.
+        """
+        user = self.get_user_by_id(user_id, safe=False)
+        if not user:
+            return None
+
+        # Re-use existing pending secret if present, or generate a fresh one
+        secret = user.get("pending_totp_secret")
+        if not secret:
+            secret = pyotp.random_base32()
+            user["pending_totp_secret"] = secret
+
+        # Generate fresh recovery codes for this setup attempt
+        raw_recovery_codes = [
+            f"{secrets.token_hex(2).upper()}-{secrets.token_hex(2).upper()}"
+            for _ in range(5)
+        ]
+        user["pending_recovery_codes"] = raw_recovery_codes
+        self._save()
+
+        # Build standard RFC 6238 otpauth URI (compatible with Google Authenticator, Bitwarden, etc.)
+        totp = pyotp.TOTP(secret)
+        otpauth_uri = totp.provisioning_uri(name=user["username"], issuer_name="AMIKO")
+
+        # Generate SVG QR Code (lossless, lightweight, zero binary dependencies)
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=8,
+            border=2,
+            image_factory=qrcode.image.svg.SvgPathImage
+        )
+        qr.add_data(otpauth_uri)
+        qr.make(fit=True)
+
+        buf = io.BytesIO()
+        qr.make_image().save(buf)
+        svg_xml = buf.getvalue().decode("utf-8")
+        svg_b64 = base64.b64encode(svg_xml.encode("utf-8")).decode("ascii")
+        qr_data_url = f"data:image/svg+xml;base64,{svg_b64}"
+
+        return {
+            "secret": secret,
+            "otpauth_uri": otpauth_uri,
+            "qr_data_url": qr_data_url,
+            "recovery_codes": raw_recovery_codes,
+            "username": user["username"]
+        }
+
+    def confirm_user_totp(self, user_id, token):
+        """
+        Verify the first 6-digit code against the pending secret to confirm enrollment.
+        Only when confirmed is totp_enabled set to True and recovery codes activated.
+        """
+        user = self.get_user_by_id(user_id, safe=False)
+        if not user:
+            return False
+
+        secret = user.get("pending_totp_secret") or user.get("totp_secret")
+        if not secret:
+            return False
+
+        totp = pyotp.TOTP(secret)
+        clean_token = str(token).strip()
+        if not totp.verify(clean_token, valid_window=1):
+            return False
+
+        user["totp_secret"] = secret
+        user["totp_enabled"] = True
+        user.pop("pending_totp_secret", None)
+
+        pending_codes = user.pop("pending_recovery_codes", None)
+        if pending_codes:
+            # Hash recovery codes so plaintext codes are never stored on disk
+            user["totp_recovery_codes"] = [
+                hashlib.sha256(c.replace("-", "").strip().upper().encode("utf-8")).hexdigest()
+                for c in pending_codes
+            ]
+
+        self._save()
+        return True
+
+    def verify_user_totp(self, user_id, token_or_code):
+        """
+        Verify a 6-digit TOTP token or an emergency recovery code.
+        Returns (success: bool, method: 'totp' | 'recovery_code' | None).
+        """
+        user = self.get_user_by_id(user_id, safe=False)
+        if not user or not user.get("totp_enabled"):
+            return False, None
+
+        cleaned = str(token_or_code).strip()
+
+        # 1. Check standard 6-digit TOTP token
+        if len(cleaned) == 6 and cleaned.isdigit():
+            secret = user.get("totp_secret")
+            if secret and pyotp.TOTP(secret).verify(cleaned, valid_window=1):
+                return True, "totp"
+
+        # 2. Check emergency one-time recovery codes
+        clean_recovery = cleaned.replace("-", "").strip().upper()
+        hashed_attempt = hashlib.sha256(clean_recovery.encode("utf-8")).hexdigest()
+        active_codes = user.get("totp_recovery_codes", [])
+        if hashed_attempt in active_codes:
+            # Burn the used recovery code
+            active_codes.remove(hashed_attempt)
+            user["totp_recovery_codes"] = active_codes
+            self._save()
+            return True, "recovery_code"
+
+        return False, None
+
+    def reset_user_totp(self, user_id):
+        """
+        Reset/clear 2FA registration for a user (Admin action or CLI break-glass).
+        Clears the stored secret, recovery codes, and marks 2FA as unconfigured.
+        """
+        user = self.get_user_by_id(user_id, safe=False)
+        if not user:
+            return False
+
+        user["totp_secret"] = None
+        user["totp_enabled"] = False
+        user["totp_recovery_codes"] = []
+        user.pop("pending_totp_secret", None)
+        user.pop("pending_recovery_codes", None)
         self._save()
         return True
 
