@@ -91,7 +91,7 @@ class SettingsPanel {
 
             if (badge) {
                 if (chain.valid) {
-                    badge.textContent = `🔒 SHA-256 Hash Chain Verified (${chain.total_entries} records)`;
+                    badge.innerHTML = `<svg class="md-icon"><use href="#md-lock"></use></svg> SHA-256 Hash Chain Verified (${chain.total_entries} records)`;
                     badge.style.borderColor = 'rgba(0, 180, 80, 0.5)';
                     badge.style.color = 'var(--text-primary)';
                 } else {
@@ -191,7 +191,7 @@ class SettingsPanel {
                 checkboxesBox.innerHTML = groups.map(g => `
                     <label class="user-group-chip">
                         <input type="checkbox" value="${g.id}" checked>
-                        <span>${this.escapeHtml(g.icon)} ${this.escapeHtml(g.name)}</span>
+                        <span style="display:inline-flex; align-items:center; gap:5px;">${this.renderGroupIcon(g.icon)} ${this.escapeHtml(g.name)}</span>
                     </label>
                 `).join('');
             }
@@ -230,29 +230,33 @@ class SettingsPanel {
         });
 
         const groupMap = {};
-        groups.forEach(g => { groupMap[g.id] = `${g.icon} ${g.name}`; });
+        groups.forEach(g => { groupMap[g.id] = g; });
         const currentUserId = window.amikoCurrentUser ? window.amikoCurrentUser.id : null;
 
         container.innerHTML = users.map(u => {
             const isSelf = u.id === currentUserId;
             const isAdmin = u.role === 'admin';
             const groupChips = isAdmin
-                ? `<span class="user-assigned-chip all-groups">🌐 All Server Groups</span>`
+                ? `<span class="user-assigned-chip all-groups" style="display:inline-flex; align-items:center; gap:4px;"><svg class="md-icon"><use href="#md-public"></use></svg> All Server Groups</span>`
                 : (u.allowed_groups && u.allowed_groups.length > 0
-                    ? u.allowed_groups.map(gid => `<span class="user-assigned-chip">${this.escapeHtml(groupMap[gid] || gid)}</span>`).join('')
-                    : `<span class="user-assigned-chip no-groups">⚠️ No groups assigned</span>`);
+                    ? u.allowed_groups.map(gid => {
+                        const gObj = groupMap[gid];
+                        const label = gObj ? `${this.renderGroupIcon(gObj.icon)} ${this.escapeHtml(gObj.name)}` : this.escapeHtml(gid);
+                        return `<span class="user-assigned-chip" style="display:inline-flex; align-items:center; gap:4px;">${label}</span>`;
+                    }).join('')
+                    : `<span class="user-assigned-chip no-groups">No groups assigned</span>`);
 
             return `
                 <div class="group-card user-card" data-user-id="${u.id}">
                     <div class="group-card-info" style="flex-wrap:wrap; gap:8px;">
-                        <span class="group-card-name">👤 ${this.escapeHtml(u.username)} ${isSelf ? '<em style="font-size:11px; color:var(--text-dim);">(you)</em>' : ''}</span>
+                        <span class="group-card-name" style="display:inline-flex; align-items:center; gap:5px;"><svg class="md-icon"><use href="#md-person"></use></svg> ${this.escapeHtml(u.username)} ${isSelf ? '<em style="font-size:11px; color:var(--text-dim);">(you)</em>' : ''}</span>
                         <span class="topbar-role-badge role-${u.role}">${u.role.toUpperCase()}</span>
                         <div class="user-assigned-groups">${groupChips}</div>
                     </div>
                     <div class="group-card-actions">
-                        <button class="btn-edit-user" title="Edit Role & Assigned Groups" data-id="${u.id}">🛡️</button>
-                        <button class="btn-pass-user" title="Reset Password" data-id="${u.id}" data-username="${this.escapeAttr(u.username)}">🔑</button>
-                        ${!isSelf ? `<button class="btn-delete-user" title="Delete User" data-id="${u.id}" data-username="${this.escapeAttr(u.username)}">🗑️</button>` : ''}
+                        <button class="btn-edit-user" title="Edit Role & Assigned Groups" data-id="${u.id}"><svg class="md-icon"><use href="#md-shield"></use></svg></button>
+                        <button class="btn-pass-user" title="Reset Password" data-id="${u.id}" data-username="${this.escapeAttr(u.username)}"><svg class="md-icon"><use href="#md-key"></use></svg></button>
+                        ${!isSelf ? `<button class="btn-delete-user btn-delete" title="Delete User" data-id="${u.id}" data-username="${this.escapeAttr(u.username)}"><svg class="md-icon"><use href="#md-delete"></use></svg></button>` : ''}
                     </div>
                 </div>
             `;
@@ -321,13 +325,13 @@ class SettingsPanel {
                     ${groups.map(g => `
                         <label class="user-group-chip">
                             <input type="checkbox" value="${g.id}" ${assignedSet.has(g.id) || assignedSet.has('*') ? 'checked' : ''}>
-                            <span>${this.escapeHtml(g.icon)} ${this.escapeHtml(g.name)}</span>
+                            <span style="display:inline-flex; align-items:center; gap:5px;">${this.renderGroupIcon(g.icon)} ${this.escapeHtml(g.name)}</span>
                         </label>
                     `).join('')}
                 </div>
                 <div style="display:flex; justify-content:flex-end; gap:8px;">
                     <button type="button" class="btn-cancel-inline" style="padding:5px 10px;">Cancel</button>
-                    <button type="button" class="btn-save-inline" style="padding:5px 12px; background:var(--accent-highlight); color:#fff; border:none; cursor:pointer;">💾 Save</button>
+                    <button type="button" class="btn-save-inline" style="padding:5px 12px; background:var(--accent-highlight); color:#fff; border:none; cursor:pointer; display:inline-flex; align-items:center; gap:5px;"><svg class="md-icon"><use href="#md-save"></use></svg> Save</button>
                 </div>
             </div>
         `;
@@ -380,16 +384,16 @@ class SettingsPanel {
             const nameInput = newForm.querySelector('.group-name-input');
             const iconInput = newForm.querySelector('.group-icon-input');
             const name = nameInput.value.trim();
-            const icon = iconInput.value.trim() || '📁';
+            const icon = (iconInput ? iconInput.value.trim() : '') || 'md-folder';
             if (!name) return;
             await this.api('POST', '/api/groups', { name, icon });
             nameInput.value = '';
-            iconInput.value = '';
+            if (iconInput) iconInput.value = 'md-folder';
             this.loadGroups();
         });
 
         if (groups.length === 0) {
-            container.innerHTML = '<div class="settings-empty">No groups created yet. Create your first one above! ☝️</div>';
+            container.innerHTML = '<div class="settings-empty" style="grid-column: 1 / -1;">No groups created yet. Create your first one above!</div>';
             return;
         }
 
@@ -402,13 +406,15 @@ class SettingsPanel {
         container.innerHTML = groups.map(g => `
             <div class="group-card" data-id="${g.id}">
                 <div class="group-card-info">
-                    <span class="group-card-icon">${this.escapeHtml(g.icon)}</span>
-                    <span class="group-card-name">${this.escapeHtml(g.name)}</span>
-                    <span class="group-card-count">(${countMap[g.id] || 0} servers)</span>
+                    <span class="group-card-icon">${this.renderGroupIcon(g.icon, true)}</span>
+                    <div>
+                        <span class="group-card-name">${this.escapeHtml(g.name)}</span>
+                        <span class="group-card-count">(${countMap[g.id] || 0} servers)</span>
+                    </div>
                 </div>
                 <div class="group-card-actions">
-                    <button class="btn-edit" title="Edit" data-id="${g.id}" data-name="${this.escapeAttr(g.name)}" data-icon="${this.escapeAttr(g.icon)}">✏️</button>
-                    <button class="btn-delete" title="Delete" data-id="${g.id}">🗑️</button>
+                    <button class="btn-edit" title="Edit" data-id="${g.id}" data-name="${this.escapeAttr(g.name)}" data-icon="${this.escapeAttr(g.icon)}"><svg class="md-icon"><use href="#md-edit"></use></svg></button>
+                    <button class="btn-delete" title="Delete" data-id="${g.id}"><svg class="md-icon"><use href="#md-delete"></use></svg></button>
                 </div>
             </div>
         `).join('');
@@ -422,26 +428,41 @@ class SettingsPanel {
         });
     }
 
-    async editGroup(id, currentName, currentIcon) {
-        const doEdit = async (newName, newIcon) => {
+    editGroup(id, currentName, currentIcon) {
+        const card = this.overlay.querySelector(`.group-card[data-id="${id}"]`);
+        if (!card) return;
+
+        const iconOptions = [
+            { value: 'md-folder', label: 'Folder' },
+            { value: 'md-dns', label: 'Server Rack' },
+            { value: 'md-cloud', label: 'Cloud / Cluster' },
+            { value: 'md-storage', label: 'Storage / DB' },
+            { value: 'md-shield', label: 'Security / DMZ' },
+            { value: 'md-terminal', label: 'Dev / Staging' },
+            { value: 'md-public', label: 'Public / Edge' }
+        ];
+
+        card.innerHTML = `
+            <div style="width:100%; display:flex; flex-direction:column; gap:8px;">
+                <input type="text" class="inline-group-name" value="${this.escapeAttr(currentName)}" style="padding:6px 8px; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border, var(--text-dim)); border-radius:4px; font-family:var(--font-mono); font-size:12px;">
+                <select class="inline-group-icon" style="padding:6px 8px; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border, var(--text-dim)); border-radius:4px; font-family:var(--font-mono); font-size:12px;">
+                    ${iconOptions.map(o => `<option value="${o.value}" ${currentIcon === o.value ? 'selected' : ''}>${o.label}</option>`).join('')}
+                </select>
+                <div style="display:flex; justify-content:flex-end; gap:6px;">
+                    <button type="button" class="btn-cancel-group" style="padding:4px 10px; background:none; border:1px solid var(--text-dim); color:var(--text-dim); cursor:pointer; border-radius:3px;">Cancel</button>
+                    <button type="button" class="btn-save-group" style="padding:4px 12px; background:var(--accent-highlight, var(--bg-tertiary)); color:var(--text-primary); border:1px solid var(--text-primary); cursor:pointer; border-radius:3px; display:inline-flex; align-items:center; gap:4px;"><svg class="md-icon"><use href="#md-save"></use></svg> Save</button>
+                </div>
+            </div>
+        `;
+
+        card.querySelector('.btn-cancel-group').addEventListener('click', () => this.loadGroups());
+        card.querySelector('.btn-save-group').addEventListener('click', async () => {
+            const newName = card.querySelector('.inline-group-name').value.trim();
+            const newIcon = card.querySelector('.inline-group-icon').value;
+            if (!newName) return;
             await this.api('PUT', `/api/groups/${id}`, { name: newName, icon: newIcon });
             this.loadGroups();
-        };
-
-        if (window.AmikoPrompt) {
-            window.AmikoPrompt('Edit Group', 'Group name:', currentName, (newName) => {
-                if (newName.trim() === '') return;
-                window.AmikoPrompt('Edit Group', 'Icon (emoji):', currentIcon, (newIcon) => {
-                    doEdit(newName, newIcon || '📁');
-                });
-            });
-        } else {
-            const newName = prompt('Group name:', currentName);
-            if (newName === null || newName.trim() === '') return;
-            const newIcon = prompt('Icon (emoji):', currentIcon);
-            if (newIcon === null) return;
-            doEdit(newName, newIcon || '📁');
-        }
+        });
     }
 
     async deleteGroup(id) {
@@ -473,7 +494,7 @@ class SettingsPanel {
     }
 
     renderServers(groups, servers) {
-        const tableWrapper = this.overlay.querySelector('.server-table-wrapper');
+        const tableWrapper = this.overlay.querySelector('#serversTableWrapper') || this.overlay.querySelector('.server-table-wrapper');
         const addRow = this.overlay.querySelector('.add-server-row');
 
         if (groups.length === 0) {
@@ -482,13 +503,13 @@ class SettingsPanel {
             return;
         }
 
-        addRow.style.display = 'flex';
+        addRow.style.display = 'block';
 
         // Populate group select in add-row
         const groupSelect = addRow.querySelector('.field-group');
         if (groupSelect) {
             groupSelect.innerHTML = groups.map(g =>
-                `<option value="${g.id}">${this.escapeHtml(g.icon)} ${this.escapeHtml(g.name)}</option>`
+                `<option value="${g.id}">${this.escapeHtml(g.name)}</option>`
             ).join('');
         }
 
@@ -504,7 +525,7 @@ class SettingsPanel {
         let tbody = '';
         groups.forEach(g => {
             const groupServers = serversByGroup[g.id] || [];
-            tbody += `<tr class="group-row"><td colspan="8">${this.escapeHtml(g.icon)} ${this.escapeHtml(g.name)} (${groupServers.length})</td></tr>`;
+            tbody += `<tr class="group-row"><td colspan="8"><span style="display:inline-flex; align-items:center; gap:8px;">${this.renderGroupIcon(g.icon)} ${this.escapeHtml(g.name)} (${groupServers.length})</span></td></tr>`;
 
             if (groupServers.length === 0) {
                 tbody += `<tr><td colspan="8" style="text-align:center; color:var(--text-dim); font-style:italic;">No servers in this group</td></tr>`;
@@ -513,20 +534,25 @@ class SettingsPanel {
             groupServers.forEach(s => {
                 const hasPw = s.has_password !== false && Boolean(s.has_password || s.password);
                 const hasKey = Boolean(s.has_private_key);
+                const pwPlaceholder = hasKey
+                    ? 'SSH Key active'
+                    : 'Set password...';
                 tbody += `
                     <tr data-server-id="${s.id}" data-group-id="${this.escapeAttr(s.group_id || '')}">
                         <td><span class="cell-editable" contenteditable="true" data-field="name">${this.escapeHtml(s.name)}</span></td>
                         <td><span class="cell-editable" contenteditable="true" data-field="hostname">${this.escapeHtml(s.hostname)}</span></td>
                         <td><span class="cell-editable" contenteditable="true" data-field="port">${s.port}</span></td>
                         <td><span class="cell-editable" contenteditable="true" data-field="username">${this.escapeHtml(s.username)}</span></td>
-                        <td><span class="cell-editable cell-password" contenteditable="true" data-field="password" data-has-password="${hasPw ? '1' : '0'}" data-real-value="" title="Click to enter a new password (leave blank to keep stored secret)">${hasKey ? '🔑 SSH Key' : (hasPw ? '••••••••' : '')}</span></td>
+                        <td>
+                            <input type="password" class="cell-password-input" data-field="password" data-has-password="${hasPw ? '1' : '0'}" value="${hasPw ? '••••••••' : ''}" placeholder="${this.escapeAttr(pwPlaceholder)}" autocomplete="new-password" title="Click to enter a new password (auto-saves on Enter or Save)">
+                        </td>
                         <td><span class="cell-editable" contenteditable="true" data-field="notes">${this.escapeHtml(s.notes || '')}</span></td>
                         <td>
                             <div class="row-actions">
-                                <button class="btn-save" title="Save changes" data-id="${s.id}">💾</button>
-                                <button class="btn-sshkey" title="Set SSH Private Key (Ed25519 / RSA)" data-id="${s.id}" data-name="${this.escapeAttr(s.name)}">🔑</button>
-                                <button class="btn-use" title="Use for connection" data-id="${s.id}">🔌</button>
-                                <button class="btn-delete" title="Delete" data-id="${s.id}">🗑️</button>
+                                <button type="button" class="btn-save" title="Save changes" data-id="${s.id}"><svg class="md-icon"><use href="#md-save"></use></svg></button>
+                                <button type="button" class="btn-sshkey" title="Set SSH Private Key (Ed25519 / RSA)" data-id="${s.id}" data-name="${this.escapeAttr(s.name)}"><svg class="md-icon"><use href="#md-key"></use></svg></button>
+                                <button type="button" class="btn-use" title="Use for connection" data-id="${s.id}"><svg class="md-icon"><use href="#md-power"></use></svg></button>
+                                <button type="button" class="btn-delete" title="Delete" data-id="${s.id}"><svg class="md-icon"><use href="#md-delete"></use></svg></button>
                             </div>
                         </td>
                     </tr>
@@ -551,34 +577,57 @@ class SettingsPanel {
             </table>
         `;
 
-        // Password edit on focus (never exposes stored password; only sets a new one if typed)
-        tableWrapper.querySelectorAll('.cell-password').forEach(cell => {
-            cell.addEventListener('focus', () => {
-                cell.textContent = cell.dataset.realValue || '';
+        const tbodyEl = tableWrapper.querySelector('tbody');
+        if (tbodyEl) {
+            tbodyEl.querySelectorAll('.cell-password-input').forEach(inp => {
+                inp.addEventListener('focus', () => {
+                    if (inp.value === '••••••••') {
+                        inp.value = '';
+                    }
+                });
+                inp.addEventListener('blur', () => {
+                    const typed = inp.value.trim();
+                    if (!typed) {
+                        inp.value = inp.dataset.hasPassword === '1' ? '••••••••' : '';
+                    } else if (typed !== '••••••••') {
+                        const row = inp.closest('tr[data-server-id]');
+                        inp.dataset.pendingPassword = typed;
+                        inp.dataset.hasPassword = '1';
+                        inp.value = '••••••••';
+                        if (row) this.saveServerRow(row.dataset.serverId, typed);
+                    }
+                });
+                inp.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const typed = inp.value.trim();
+                        const row = inp.closest('tr[data-server-id]');
+                        if (typed && typed !== '••••••••') {
+                            inp.dataset.pendingPassword = '';
+                            inp.dataset.hasPassword = '1';
+                            inp.value = '••••••••';
+                            if (row) this.saveServerRow(row.dataset.serverId, typed);
+                        } else if (row) {
+                            this.saveServerRow(row.dataset.serverId);
+                        }
+                        inp.blur();
+                    }
+                });
             });
-            cell.addEventListener('blur', () => {
-                const current = cell.textContent.trim();
-                cell.dataset.realValue = current;
-                if (current) {
-                    cell.textContent = '•'.repeat(current.length);
-                } else {
-                    cell.textContent = cell.dataset.hasPassword === '1' ? '••••••••' : '';
-                }
+
+            // Bind table actions on tbodyEl (freshly created, no duplicate listeners!)
+            tbodyEl.addEventListener('click', (e) => {
+                const btnSave = e.target.closest('.btn-save');
+                const btnKey = e.target.closest('.btn-sshkey');
+                const btnUse = e.target.closest('.btn-use');
+                const btnDelete = e.target.closest('.btn-delete');
+
+                if (btnSave) this.saveServerRow(btnSave.dataset.id);
+                else if (btnKey) this.setServerSshKey(btnKey.dataset.id, btnKey.dataset.name);
+                else if (btnUse) this.useServer(btnUse.dataset.id);
+                else if (btnDelete) this.deleteServer(btnDelete.dataset.id);
             });
-        });
-
-        // Event delegation for table actions
-        tableWrapper.addEventListener('click', (e) => {
-            const btnSave = e.target.closest('.btn-save');
-            const btnKey = e.target.closest('.btn-sshkey');
-            const btnUse = e.target.closest('.btn-use');
-            const btnDelete = e.target.closest('.btn-delete');
-
-            if (btnSave) this.saveServerRow(btnSave.dataset.id);
-            else if (btnKey) this.setServerSshKey(btnKey.dataset.id, btnKey.dataset.name);
-            else if (btnUse) this.useServer(btnUse.dataset.id);
-            else if (btnDelete) this.deleteServer(btnDelete.dataset.id);
-        });
+        }
 
         // Add-server form handler (re-bind)
         const addForm = addRow.querySelector('.add-server-form');
@@ -631,7 +680,7 @@ class SettingsPanel {
                 <td style="font-family:var(--font-mono); font-size:11px; color:var(--text-dim);">${this.escapeHtml(item.key_type || '')}</td>
                 <td style="font-family:var(--font-mono); font-size:11px; color:var(--accent-highlight);">${this.escapeHtml(item.fingerprint || '')}</td>
                 <td style="width:60px; text-align:center;">
-                    <button class="btn-del-kh" title="Unpin / Reset Host Key" data-host="${this.escapeAttr(item.host || '')}" style="background:none; border:none; cursor:pointer;">🗑️</button>
+                    <button class="btn-del-kh" title="Unpin / Reset Host Key" data-host="${this.escapeAttr(item.host || '')}" style="background:none; border:none; cursor:pointer; color:var(--text-dim);"><svg class="md-icon"><use href="#md-delete"></use></svg></button>
                 </td>
             </tr>
         `).join('');
@@ -666,31 +715,55 @@ class SettingsPanel {
         });
     }
 
-    async saveServerRow(serverId) {
+    async saveServerRow(serverId, explicitPassword = null) {
         const row = this.overlay.querySelector(`tr[data-server-id="${serverId}"]`);
         if (!row) return;
 
         const data = {};
         row.querySelectorAll('.cell-editable').forEach(cell => {
-            if (cell.dataset.field === 'password') {
-                const newPw = (cell.dataset.realValue || '').trim();
-                if (newPw) {
-                    data.password = newPw;
-                    cell.dataset.hasPassword = '1';
-                    cell.dataset.realValue = '';
-                }
-            } else {
-                data[cell.dataset.field] = cell.textContent.trim();
-            }
+            data[cell.dataset.field] = cell.textContent.trim();
         });
 
-        await this.api('PUT', `/api/servers/${serverId}`, data);
+        const pwInput = row.querySelector('.cell-password-input');
+        if (explicitPassword && explicitPassword !== '••••••••') {
+            data.password = explicitPassword;
+        } else if (pwInput) {
+            const val = pwInput.value.trim();
+            const pending = (pwInput.dataset.pendingPassword || '').trim();
+            if (val && val !== '••••••••') {
+                data.password = val;
+            } else if (pending && pending !== '••••••••') {
+                data.password = pending;
+            }
+            pwInput.dataset.pendingPassword = '';
+        }
+
+        const res = await this.api('PUT', `/api/servers/${serverId}`, data);
+        if (res && res.error) {
+            if (window.AmikoAlert) window.AmikoAlert('Error', res.error);
+            return;
+        }
+
+        if (pwInput && data.password) {
+            pwInput.dataset.hasPassword = '1';
+            pwInput.value = '••••••••';
+        }
+
         this.refreshQuickList();
 
-        // Visual feedback
+        // Visual feedback on row and save button
+        const saveBtn = row.querySelector('.btn-save');
+        if (saveBtn) {
+            saveBtn.style.borderColor = '#4cff88';
+            saveBtn.style.color = '#4cff88';
+            setTimeout(() => {
+                saveBtn.style.borderColor = '';
+                saveBtn.style.color = '';
+            }, 1200);
+        }
         row.style.transition = 'background-color 0.3s';
-        row.style.backgroundColor = 'var(--bg-tertiary)';
-        setTimeout(() => { row.style.backgroundColor = ''; }, 800);
+        row.style.backgroundColor = 'rgba(0, 180, 80, 0.15)';
+        setTimeout(() => { row.style.backgroundColor = ''; }, 900);
     }
 
     async setServerSshKey(serverId, serverName) {
@@ -757,6 +830,9 @@ class SettingsPanel {
         const row = this.overlay.querySelector(`tr[data-server-id="${serverId}"]`);
         if (!row) return;
 
+        // Ensure any inline edits on this row are saved before connecting
+        await this.saveServerRow(serverId);
+
         const fields = {};
         row.querySelectorAll('.cell-editable').forEach(cell => {
             if (cell.dataset.field !== 'password') {
@@ -764,8 +840,14 @@ class SettingsPanel {
             }
         });
 
+        // If already connected to another session, disconnect cleanly first
+        if (window.globalConnection && window.globalConnection.connected && typeof disconnectGlobal === 'function') {
+            disconnectGlobal();
+        }
+
         window.globalConnection.serverId = serverId;
         window.globalConnection.groupId = row.dataset.groupId || null;
+        window.globalConnection.serverName = fields.name || null;
 
         // Fill the global connection form (password remains in backend vault)
         document.getElementById('global_hostname').value = fields.hostname || '';
@@ -773,8 +855,9 @@ class SettingsPanel {
         document.getElementById('global_username').value = fields.username || '';
         const pwInput = document.getElementById('global_password');
         if (pwInput) {
-            pwInput.value = '';
-            pwInput.placeholder = 'Stored in Vault 🔒';
+            pwInput.value = '••••••••';
+            pwInput.dataset.usingVault = '1';
+            pwInput.placeholder = 'Stored in Vault';
             pwInput.required = false;
         }
 
@@ -795,6 +878,16 @@ class SettingsPanel {
         }
 
         this.close();
+
+        // Automatically trigger the global connection
+        const loginForm = document.getElementById('globalLoginForm');
+        if (loginForm) {
+            if (typeof loginForm.requestSubmit === 'function') {
+                loginForm.requestSubmit();
+            } else {
+                loginForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+            }
+        }
     }
 
     async deleteServer(serverId) {
@@ -1236,7 +1329,7 @@ class SettingsPanel {
     applyTheme(themeId) {
         const link = document.getElementById('theme-stylesheet');
         if (link) {
-            link.href = `/static/css/themes/${themeId}.css`;
+            link.href = `/static/css/themes/${themeId}.css?v=0.6.2`;
             // Refresh JS theme bridge after CSS loads
             link.onload = () => {
                 if (typeof refreshThemeVars === 'function') {
@@ -1258,6 +1351,31 @@ class SettingsPanel {
         if (body) opts.body = JSON.stringify(body);
         const resp = await fetch(url, opts);
         return resp.json();
+    }
+
+    renderGroupIcon(icon, large = false) {
+        const map = {
+            'md-folder': 'md-folder',
+            'md-dns': 'md-dns',
+            'md-cloud': 'md-cloud',
+            'md-storage': 'md-storage',
+            'md-shield': 'md-shield',
+            'md-terminal': 'md-terminal',
+            'md-public': 'md-public',
+            '📁': 'md-folder',
+            '📂': 'md-folder',
+            '🖥️': 'md-dns',
+            '🖥': 'md-dns',
+            '☁️': 'md-cloud',
+            '☁': 'md-cloud',
+            '💾': 'md-storage',
+            '🛡️': 'md-shield',
+            '🛡': 'md-shield',
+            '💻': 'md-terminal',
+            '🌐': 'md-public'
+        };
+        const sym = map[icon] || (icon && icon.startsWith('md-') ? icon : 'md-folder');
+        return `<svg class="md-icon${large ? ' md-icon-lg' : ''}"><use href="#${sym}"></use></svg>`;
     }
 
     escapeHtml(str) {
@@ -1309,7 +1427,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.active_theme) {
                 const link = document.getElementById('theme-stylesheet');
                 if (link) {
-                    link.href = `/static/css/themes/${data.active_theme}.css`;
+                    link.href = `/static/css/themes/${data.active_theme}.css?v=0.6.2`;
                     link.onload = () => {
                         if (typeof refreshThemeVars === 'function') {
                             refreshThemeVars();

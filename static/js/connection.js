@@ -13,6 +13,7 @@ window.globalConnection = {
     sessionId: null,
     statsStream: null,
     serverId: null,
+    serverName: null,
     groupId: null
 };
 
@@ -32,16 +33,20 @@ document.addEventListener('DOMContentLoaded', function () {
         const hostname = document.getElementById('global_hostname').value;
         const port = document.getElementById('global_port').value;
         const username = document.getElementById('global_username').value;
-        const password = document.getElementById('global_password').value;
+        const pwInputEl = document.getElementById('global_password');
+        const rawPw = pwInputEl ? pwInputEl.value : '';
+        const password = (rawPw === '••••••••' || (pwInputEl && pwInputEl.dataset.usingVault === '1' && !rawPw)) ? '' : rawPw;
 
         // Extract server/group IDs from the dropdown selection (or Settings "Use" action)
         let selectedServerId = window.globalConnection.serverId || null;
+        let selectedServerName = window.globalConnection.serverName || null;
         let selectedGroupId = window.globalConnection.groupId || null;
         const savedSelect = document.getElementById('saved_servers');
         if (savedSelect && savedSelect.value && savedSelect.value !== 'new') {
             try {
                 const sel = JSON.parse(savedSelect.value);
                 selectedServerId = sel.id || selectedServerId;
+                selectedServerName = sel.name || selectedServerName;
                 selectedGroupId  = sel.group_id || selectedGroupId;
             } catch { /* manual entry — no IDs */ }
         }
@@ -58,6 +63,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
                 body: JSON.stringify({
                     server_id: selectedServerId,
+                    server_name: selectedServerName,
                     group_id: selectedGroupId,
                     hostname,
                     port,
@@ -76,9 +82,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 window.globalConnection.password = null;
                 window.globalConnection.sessionId = result.session_id;
                 window.globalConnection.serverId = result.server_id || selectedServerId;
+                window.globalConnection.serverName = result.server_name || selectedServerName || null;
                 window.globalConnection.groupId  = result.group_id || selectedGroupId;
 
-                updateConnectionUI(true, window.globalConnection.hostname, window.globalConnection.port, window.globalConnection.username);
+                updateConnectionUI(true, window.globalConnection.hostname, window.globalConnection.port, window.globalConnection.username, window.globalConnection.serverName);
 
                 sessionStorage.setItem('globalConnection', JSON.stringify({
                     hostname: window.globalConnection.hostname,
@@ -86,6 +93,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     username: window.globalConnection.username,
                     sessionId: window.globalConnection.sessionId,
                     serverId: window.globalConnection.serverId,
+                    serverName: window.globalConnection.serverName,
                     groupId:  window.globalConnection.groupId
                 }));
 
@@ -97,6 +105,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         port: window.globalConnection.port,
                         username: window.globalConnection.username,
                         serverId: window.globalConnection.serverId,
+                        serverName: window.globalConnection.serverName,
                         sessionId: window.globalConnection.sessionId
                     }
                 }));
@@ -138,6 +147,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         // Restore server/group IDs if present
         if (conn.serverId) window.globalConnection.serverId = conn.serverId;
+        if (conn.serverName) window.globalConnection.serverName = conn.serverName;
         if (conn.groupId)  window.globalConnection.groupId  = conn.groupId;
     }
 
@@ -146,7 +156,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // Update connection UI
-function updateConnectionUI(connected, hostname, port, username) {
+function updateConnectionUI(connected, hostname, port, username, serverName) {
     const connectionForm = document.getElementById('connectionForm');
     const connectionStatus = document.getElementById('connectionStatus');
     const globalConnectBtn = document.getElementById('globalConnectBtn');
@@ -172,7 +182,9 @@ function updateConnectionUI(connected, hostname, port, username) {
 
         statusDot.classList.add('connected');
         statusText.textContent = 'CONNECTED';
-        connectionInfo.textContent = `${username}@${hostname}:${port}`;
+        connectionInfo.textContent = serverName
+            ? `${serverName} • ${username}@${hostname}:${port}`
+            : `${username}@${hostname}:${port}`;
     } else {
         connectionForm.classList.remove('hidden');
         connectionStatus.classList.add('hidden');
@@ -266,6 +278,7 @@ function disconnectGlobal() {
     window.globalConnection.sessionId = null;
     window.globalConnection.statsStream = null;
     window.globalConnection.serverId = null;
+    window.globalConnection.serverName = null;
     window.globalConnection.groupId = null;
 
     sessionStorage.removeItem('globalConnection');
@@ -332,13 +345,28 @@ function loadSavedServers() {
 // Handle server selection from dropdown
 document.addEventListener('DOMContentLoaded', function () {
     const select = document.getElementById('saved_servers');
+    const pwInput = document.getElementById('global_password');
+    if (pwInput) {
+        pwInput.addEventListener('focus', function () {
+            if (this.value === '••••••••' || this.dataset.usingVault === '1') {
+                this.value = '';
+                this.dataset.usingVault = '0';
+            }
+        });
+        pwInput.addEventListener('blur', function () {
+            if (!this.value && window.globalConnection.serverId) {
+                this.value = '••••••••';
+                this.dataset.usingVault = '1';
+            }
+        });
+    }
     if (select) {
         select.addEventListener('change', function () {
             const val = this.value;
-            const pwInput = document.getElementById('global_password');
             const isAdmin = window.amikoCurrentUser && window.amikoCurrentUser.role === 'admin';
             if (!val || val === 'new') {
                 window.globalConnection.serverId = null;
+                window.globalConnection.serverName = null;
                 window.globalConnection.groupId = null;
                 if (val === 'new') {
                     document.getElementById('global_hostname').value = '';
@@ -347,7 +375,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
                 if (pwInput) {
                     pwInput.value = '';
-                    pwInput.placeholder = isAdmin ? '••••••' : 'Stored in Vault 🔒';
+                    pwInput.dataset.usingVault = '0';
+                    pwInput.placeholder = isAdmin ? '••••••' : 'Stored in Vault';
                     pwInput.required = isAdmin;
                 }
                 return;
@@ -355,14 +384,16 @@ document.addEventListener('DOMContentLoaded', function () {
             try {
                 const server = JSON.parse(val);
                 window.globalConnection.serverId = server.id || null;
+                window.globalConnection.serverName = server.name || null;
                 window.globalConnection.groupId = server.group_id || null;
                 document.getElementById('global_hostname').value = server.hostname || '';
                 document.getElementById('global_port').value = server.port || 22;
                 document.getElementById('global_username').value = server.username || '';
                 if (pwInput) {
                     const hasStoredSecret = (server.has_password !== false) || Boolean(server.has_private_key);
-                    pwInput.value = '';
-                    pwInput.placeholder = hasStoredSecret ? 'Stored in Vault 🔒' : '••••••';
+                    pwInput.value = hasStoredSecret ? '••••••••' : '';
+                    pwInput.dataset.usingVault = hasStoredSecret ? '1' : '0';
+                    pwInput.placeholder = hasStoredSecret ? 'Stored in Vault' : '••••••';
                     pwInput.required = false;
                 }
             } catch (e) {

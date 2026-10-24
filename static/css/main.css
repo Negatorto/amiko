@@ -583,10 +583,13 @@ button.btn-warning:hover {
 }
 
 .winbox.wb-amiko .wb-control * {
+    filter: var(--wb-icon-filter, none);
+    opacity: 0.85;
     transition: all 0.2s;
 }
 
 .winbox.wb-amiko .wb-control *:hover {
+    opacity: 1;
     transform: scale(1.2);
 }
 

@@ -31,14 +31,15 @@ class SSHModule {
     initSSHTerminal() {
         console.log('Initializing Xterm.js terminal instance...');
 
-        // 1. Initialize Terminal
+        // 1. Initialize Terminal (Always black background with white text)
         this.term = new Terminal({
             cursorBlink: true,
             theme: {
-                background: window.AMIKO_THEME.bg_primary,
-                foreground: window.AMIKO_THEME.text_primary,
-                cursor: window.AMIKO_THEME.text_primary,
-                selection: 'rgba(0, 255, 0, 0.3)'
+                background: '#000000',
+                foreground: '#ffffff',
+                cursor: '#ffffff',
+                cursorAccent: '#000000',
+                selectionBackground: 'rgba(255, 255, 255, 0.3)'
             },
             fontFamily: "'Courier New', Courier, monospace",
             fontSize: 14,

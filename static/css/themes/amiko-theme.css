@@ -29,6 +29,7 @@
     --border-medium: rgba(45, 52, 54, 0.15);
     --glow-primary: rgba(13, 115, 119, 0.1);
     --glow-warning: rgba(13, 115, 119, 0.15);
+    --wb-icon-filter: invert(0.85);
 
     /* Typography */
     --font-mono: 'Courier New', 'Consolas', 'Monaco', monospace;

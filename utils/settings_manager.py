@@ -302,8 +302,10 @@ class SettingsManager:
         private_key = data.get("private_key") or ""
         group_id = data.get("group_id")
 
+        server_name = data.get("server_name") or ""
+
         # 1. Resolve from active server-side SSH session if session_id is valid
-        if session_id and ssh_sessions and session_id in ssh_sessions:
+        if session_id and ssh_sessions and ssh_sessions in (ssh_sessions,) and session_id in ssh_sessions:
             s_data = ssh_sessions[session_id]
             hostname = hostname or s_data.get("hostname", "")
             port = int(data.get("port") or s_data.get("port", 22))
@@ -311,6 +313,7 @@ class SettingsManager:
             password = password or s_data.get("password", "")
             private_key = private_key or s_data.get("private_key", "")
             server_id = server_id or s_data.get("server_id")
+            server_name = server_name or s_data.get("server_name", "")
             group_id = group_id or s_data.get("group_id")
 
         # 2. Resolve from encrypted vault by server_id
@@ -324,10 +327,11 @@ class SettingsManager:
                     password = srv.get("password", "")
                 if not private_key:
                     private_key = srv.get("private_key", "")
+                server_name = server_name or srv.get("name", "")
                 group_id = group_id or srv.get("group_id")
 
         # 3. Fallback: match by (hostname, port, username) in user's allowed vault servers
-        if hostname and not (password or private_key):
+        if hostname and (not (password or private_key) or not server_name):
             candidates = self.get_servers_for_user(user, safe=False) if user else self.get_servers(safe=False)
             for srv in candidates:
                 if (
@@ -336,9 +340,12 @@ class SettingsManager:
                     and (not username or srv.get("username") == username)
                 ):
                     username = username or srv.get("username", "")
-                    password = srv.get("password", "")
-                    private_key = srv.get("private_key", "")
+                    if not password:
+                        password = srv.get("password", "")
+                    if not private_key:
+                        private_key = srv.get("private_key", "")
                     server_id = server_id or srv.get("id")
+                    server_name = server_name or srv.get("name", "")
                     group_id = group_id or srv.get("group_id")
                     break
 
@@ -352,6 +359,7 @@ class SettingsManager:
             "password": password,
             "private_key": private_key,
             "server_id": server_id,
+            "server_name": server_name,
             "group_id": group_id
         }
 
@@ -587,7 +595,7 @@ class SettingsManager:
             token = cipher.encrypt(raw_bytes).decode("ascii")
             return {
                 "amiko_backup": True,
-                "version": "0.6",
+                "version": "0.6.2",
                 "created_at": now_iso,
                 "encrypted": True,
                 "kdf": "PBKDF2-HMAC-SHA256-600000",
@@ -596,7 +604,7 @@ class SettingsManager:
             }
         return {
             "amiko_backup": True,
-            "version": "0.6",
+            "version": "0.6.2",
             "created_at": now_iso,
             "encrypted": False,
             "data": payload

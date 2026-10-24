@@ -22,7 +22,7 @@
         <!-- Breadcrumb Navigation -->
         <div class="mod-explorer-breadcrumb"
             style="padding: 8px 12px; border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1)); font-family: monospace; font-size: 0.85em; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-height: 32px; flex-shrink: 0;">
-            <span style="opacity: 0.5;">📍</span>
+            <span style="opacity: 0.6; display:inline-flex; align-items:center;"><svg class="md-icon"><use href="#md-location"></use></svg></span>
             <span class="mod-explorer-crumb-root" style="cursor: pointer; color: var(--accent-amber, #f0c040);"
                 title="Go to /">/</span>
         </div>
@@ -30,13 +30,13 @@
         <!-- Path Input Bar -->
         <div
             style="padding: 6px 12px; border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1)); display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-            <button type="button" class="mod-explorer-btn-up mod-btn-submit" title="Parent directory (..)" style="padding: 4px 10px; font-size: 0.85em;">⬆️</button>
+            <button type="button" class="mod-explorer-btn-up mod-btn-submit" title="Parent directory (..)" style="padding: 4px 10px; font-size: 0.85em; display:inline-flex; align-items:center;"><svg class="md-icon"><use href="#md-arrow-up"></use></svg></button>
             <input type="text" class="mod-explorer-path-input" placeholder="/" value="/"
                 style="flex: 1; background: transparent; border: 1px solid var(--border-color, rgba(255,255,255,0.15)); color: var(--text-primary, #0f0); padding: 4px 8px; font-family: monospace; font-size: 0.85em; border-radius: 3px;">
             <span class="mod-explorer-loading" style="display: none; align-items: center; font-family: monospace; font-size: 0.78em; color: var(--accent-amber, #f0c040); white-space: nowrap;">
-                <span class="mod-explorer-loading-text">⏳</span>
+                <span class="mod-explorer-loading-text">...</span>
             </span>
-            <button type="button" class="mod-explorer-btn-refresh mod-btn-submit" title="Refresh folder" style="padding: 4px 10px; font-size: 0.85em;">🔄</button>
+            <button type="button" class="mod-explorer-btn-refresh mod-btn-submit" title="Refresh folder" style="padding: 4px 10px; font-size: 0.85em; display:inline-flex; align-items:center;"><svg class="md-icon"><use href="#md-refresh"></use></svg></button>
             <button type="button" class="mod-explorer-btn-go mod-btn-submit" style="padding: 4px 14px; font-size: 0.85em;">GO</button>
         </div>
 

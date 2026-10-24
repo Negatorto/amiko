@@ -152,6 +152,7 @@ def ssh_connect():
     password = resolved['password']
     private_key = resolved.get('private_key', '')
     server_id = resolved.get('server_id')
+    server_name = resolved.get('server_name', '')
     group_id = resolved.get('group_id')
 
     try:
@@ -164,6 +165,11 @@ def ssh_connect():
         
         # Generate session ID
         session_id = f"{hostname}_{username}_{int(time.time())}"
+
+        # If an admin explicitly typed a new password while connecting to a saved server, persist it in the vault
+        typed_pw = data.get('password') or ''
+        if server_id and typed_pw and user and user.get('role') == 'admin':
+            settings.update_server(server_id, password=typed_pw)
         
         # Store SSH connection server-side
         ssh_sessions[session_id] = {
@@ -174,6 +180,7 @@ def ssh_connect():
             'password': password,
             'private_key': private_key,
             'server_id': server_id,
+            'server_name': server_name,
             'group_id': group_id,
             'user_id': user['id'] if user else None,
             'cwd': initial_cwd
@@ -184,12 +191,13 @@ def ssh_connect():
             status='SUCCESS',
             severity='INFO',
             target={'server_id': server_id, 'hostname': hostname, 'port': port},
-            details={'ssh_username': username, 'session_id': session_id}
+            details={'ssh_username': username, 'session_id': session_id, 'server_name': server_name}
         )
         return jsonify({
             'success': True,
             'session_id': session_id,
             'server_id': server_id,
+            'server_name': server_name,
             'group_id': group_id,
             'hostname': hostname,
             'port': port,
@@ -597,10 +605,23 @@ def api_create_server():
 @app.route('/api/servers/<server_id>', methods=['PUT'])
 @role_required('admin')
 def api_update_server(server_id):
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     result = settings.update_server(server_id, **data)
     if result is None:
         return jsonify({'error': 'Server not found'}), 404
+
+    # Sync any active SSH session using this server_id with the updated vault record
+    raw_srv = settings.get_server_by_id(server_id, safe=False)
+    if raw_srv:
+        for s_data in ssh_sessions.values():
+            if s_data.get('server_id') == server_id:
+                s_data['hostname'] = raw_srv.get('hostname', s_data.get('hostname'))
+                s_data['port'] = raw_srv.get('port', s_data.get('port'))
+                s_data['username'] = raw_srv.get('username', s_data.get('username'))
+                s_data['password'] = raw_srv.get('password', '')
+                s_data['private_key'] = raw_srv.get('private_key', '')
+                s_data['server_name'] = raw_srv.get('name', '')
+
     log_audit_event(
         event_type='SERVER_UPDATED',
         status='SUCCESS',

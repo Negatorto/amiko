@@ -330,11 +330,12 @@ class ExplorerModule {
             buttons.appendChild(roBadge);
         } else {
             const btnSave = document.createElement('button');
-            btnSave.textContent = '💾 SAVE';
+            btnSave.innerHTML = '<svg class="md-icon"><use href="#md-save"></use></svg> SAVE';
             btnSave.style.cssText = `
                 background: rgba(0, 180, 80, 0.15); border: 1px solid rgba(0, 180, 80, 0.4);
                 color: #4cff88; cursor: pointer; padding: 5px 16px; border-radius: 4px;
                 font-family: monospace; font-size: 0.85em; transition: all 0.2s;
+                display: inline-flex; align-items: center; gap: 6px;
             `;
             btnSave.addEventListener('mouseenter', () => { btnSave.style.background = 'rgba(0, 180, 80, 0.3)'; });
             btnSave.addEventListener('mouseleave', () => { btnSave.style.background = 'rgba(0, 180, 80, 0.15)'; });
@@ -602,7 +603,9 @@ class ExplorerModule {
 
         if (entryName) {
             items.push({
-                icon: entryIsDir ? '📂' : (isReadOnly ? '👁️' : '✏️'),
+                icon: entryIsDir
+                    ? '<svg class="md-icon"><use href="#md-folder"></use></svg>'
+                    : (isReadOnly ? '<svg class="md-icon"><use href="#md-file"></use></svg>' : '<svg class="md-icon"><use href="#md-edit"></use></svg>'),
                 label: entryIsDir ? 'Open' : (isReadOnly ? 'View (Read-Only)' : 'Open / Edit'),
                 action: () => this._openEntry(entryName, entryIsDir)
             });
@@ -612,12 +615,12 @@ class ExplorerModule {
         if (!isReadOnly) {
             items.push(
                 {
-                    icon: '📄',
+                    icon: '<svg class="md-icon"><use href="#md-file"></use></svg>',
                     label: 'New File',
                     action: () => this._createNewFile()
                 },
                 {
-                    icon: '📁',
+                    icon: '<svg class="md-icon"><use href="#md-folder"></use></svg>',
                     label: 'New Folder',
                     action: () => this._createNewFolder()
                 }
@@ -626,7 +629,7 @@ class ExplorerModule {
             if (entryName) {
                 items.push({ separator: true });
                 items.push({
-                    icon: '🗑️',
+                    icon: '<svg class="md-icon"><use href="#md-delete"></use></svg>',
                     label: `Delete "${entryName}"`,
                     danger: true,
                     action: () => this._deleteEntry(entryName, entryIsDir)
@@ -864,7 +867,7 @@ class ExplorerModule {
             upRow.className = 'mod-explorer-row';
             upRow.dataset.parentNav = 'true';
             upRow.innerHTML = `
-                <td style="padding: 7px 12px; color: var(--text-primary);">📁 ..</td>
+                <td style="padding: 7px 12px; color: var(--text-primary);"><span style="display:inline-flex; align-items:center; gap:6px;"><svg class="md-icon"><use href="#md-folder"></use></svg> ..</span></td>
                 <td style="padding: 7px 12px; text-align: right; color: var(--text-dim);">—</td>`;
             frag.appendChild(upRow);
         }
@@ -887,9 +890,11 @@ class ExplorerModule {
             row.dataset.entryName  = entry.name;
             row.dataset.entryIsDir = entry.is_dir;
 
-            const icon = entry.is_dir ? '📁' : '📄';
+            const icon = entry.is_dir
+                ? '<svg class="md-icon"><use href="#md-folder"></use></svg>'
+                : '<svg class="md-icon" style="opacity:0.75;"><use href="#md-file"></use></svg>';
             row.innerHTML = `
-                <td style="padding: 7px 12px; color: var(--text-primary);">${icon} ${this.escapeHtml(entry.name)}</td>
+                <td style="padding: 7px 12px; color: var(--text-primary);"><span style="display:inline-flex; align-items:center; gap:6px;">${icon} ${this.escapeHtml(entry.name)}</span></td>
                 <td style="padding: 7px 12px; text-align: right; color: var(--text-dim);">${entry.size_display}</td>`;
             frag.appendChild(row);
         }

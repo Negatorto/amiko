@@ -249,21 +249,29 @@ class AmikoDesktopLauncher {
         const txt = document.getElementById('bottombarStatusText');
         const topDot = document.getElementById('topbarStatusDot');
 
-        const setConnected = (connected, host) => {
+        const setConnected = (connected, host, serverName) => {
             if (dot) dot.classList.toggle('connected', connected);
-            if (txt) txt.textContent = connected ? `Connected: ${host}` : 'Disconnected';
+            if (txt) {
+                if (connected) {
+                    txt.textContent = serverName
+                        ? `Connected: ${serverName} (${host})`
+                        : `Connected: ${host}`;
+                } else {
+                    txt.textContent = 'Disconnected';
+                }
+            }
             if (topDot) topDot.classList.toggle('connected', connected);
         };
 
         window.addEventListener('amikoGlobalConnect', (e) => {
-            setConnected(true, e.detail?.hostname || '');
+            setConnected(true, e.detail?.hostname || '', e.detail?.serverName || '');
             // Close the popover after successful connect
             const panel = document.getElementById('connectionPanel');
             if (panel) panel.classList.add('hidden');
         });
 
         window.addEventListener('amikoGlobalDisconnect', () => {
-            setConnected(false, '');
+            setConnected(false, '', '');
         });
     }
 

@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="static/img/AMIKO.png?v=0.5" alt="AMIKO Logo" width="230">
+  <img src="static/img/AMIKO.png?v=0.6.2" alt="AMIKO Logo" width="230">
 </p>
 
-# AMIKO
+# AMIKO v0.6.2
 
 
 **Advanced Multi-function Interface Kit for Operations**
@@ -165,8 +165,9 @@ AMIKO is in early development (v0.6). The core architecture is functional, but t
 - [x] Desktop-environment UI (top bar, sidebar dock, floating WinBox windows)
 - [x] GNOME style CPU/RAM/DISK monitor in top bar
 - [x] Live clock in top bar
-- [x] Connection panel as topbar popover
-- [x] Settings panel improvements (export/import config, server management)
+- [x] Connection panel as topbar popover + active VM name & IP indicator in bottom bar
+- [x] Material Design vector SVG icon system across Settings, Groups, Servers, and Explorer
+- [x] Settings panel improvements (export/import config, multi-column group cards, horizontal server form)
 - [ ] Enhanced text editor in Explorer (syntax highlighting, search/replace)
 
 ### Performance

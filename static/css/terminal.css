@@ -5,12 +5,10 @@
  */
 
 .terminal-container {
-    background-color: var(--bg-primary);
+    background-color: #000000 !important;
     border: 2px solid var(--text-primary);
     margin: 20px 0;
-    box-shadow:
-        0 0 30px var(--glow-primary),
-        inset 0 0 20px rgba(0, 255, 65, 0.05);
+    box-shadow: 0 0 20px var(--glow-primary);
     position: relative;
     overflow: hidden;
     cursor: text;
@@ -67,7 +65,8 @@
     max-height: 400px;
     height: 100%;
     overflow-y: auto;
-    color: var(--text-primary);
+    background-color: #000000 !important;
+    color: #ffffff !important;
     position: relative;
 }
 

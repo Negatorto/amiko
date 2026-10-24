@@ -1,6 +1,6 @@
 import os
 from datetime import timedelta
-from flask import Flask
+from flask import Flask, request
 from flask_socketio import SocketIO
 from core.plugins import load_modules
 from core.config import settings
@@ -16,6 +16,7 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(
 )
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.jinja_env.auto_reload = True
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
 _cors_env = os.environ.get('AMIKO_CORS_ORIGINS', '').strip()
 _cors_origins = [o.strip() for o in _cors_env.split(',') if o.strip()] if _cors_env else '*'
@@ -41,6 +42,8 @@ def apply_security_headers(response):
     )
     if app.config.get('SESSION_COOKIE_SECURE'):
         response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    if request.path == '/' or request.path.startswith('/static/') or request.path.startswith('/static_modules/'):
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     return response
 
 

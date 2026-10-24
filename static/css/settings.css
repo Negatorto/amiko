@@ -190,6 +190,23 @@
 .settings-tab-icon {
     font-size: 1.4rem;
     line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Material Design Vector Icons */
+.md-icon {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+
+.md-icon-lg {
+    width: 22px;
+    height: 22px;
 }
 
 /* Content Area */
@@ -220,37 +237,69 @@
 /* --- Groups Tab --- */
 .group-form {
     display: flex;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 12px;
     margin-bottom: 20px;
     align-items: flex-end;
+    padding: 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border, var(--text-dim));
+    border-radius: 6px;
 }
 
 .group-form .form-field {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 5px;
 }
 
 .group-form .form-field label {
     font-size: var(--font-size-small);
     color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
-.group-form input {
+.group-form input,
+.group-form select {
     padding: 8px 12px;
-    width: 200px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border, var(--text-dim));
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    border-radius: 4px;
 }
 
-.group-form .icon-input {
-    width: 60px;
-    text-align: center;
-    font-size: 1.2rem;
+.group-form .group-name-input {
+    min-width: 220px;
+}
+
+.group-form .group-icon-input {
+    min-width: 160px;
+}
+
+.group-form button[type="submit"] {
+    padding: 8px 16px;
+    background: var(--accent-highlight, var(--bg-tertiary));
+    color: var(--text-primary);
+    border: 1px solid var(--text-primary);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.group-form button[type="submit"]:hover {
+    box-shadow: 0 0 8px var(--glow-primary);
 }
 
 .group-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
 }
 
 .group-card {
@@ -260,7 +309,7 @@
     padding: 12px 16px;
     background-color: var(--bg-secondary);
     border: 1px solid var(--text-dim);
-    border-radius: 4px;
+    border-radius: 6px;
     transition: all 0.2s;
 }
 
@@ -272,11 +321,15 @@
 .group-card-info {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
+    min-width: 0;
 }
 
 .group-card-icon {
-    font-size: 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-primary);
 }
 
 .group-card-name {
@@ -371,11 +424,13 @@
 
 /* Editable cells */
 .server-table .cell-editable {
+    display: inline-block;
     cursor: text;
     padding: 6px 8px;
     border-radius: 2px;
     transition: background-color 0.15s;
     min-width: 80px;
+    min-height: 18px;
 }
 
 .server-table .cell-editable:hover {
@@ -389,9 +444,28 @@
     box-shadow: 0 0 6px var(--glow-primary);
 }
 
-.server-table .cell-editable.cell-password {
-    font-family: monospace;
-    letter-spacing: 3px;
+.server-table .cell-password-input {
+    width: 135px;
+    padding: 5px 8px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border, var(--text-dim));
+    border-radius: 3px;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    transition: all 0.15s;
+}
+
+.server-table .cell-password-input:focus {
+    outline: none;
+    border-color: var(--text-primary);
+    box-shadow: 0 0 6px var(--glow-primary);
+}
+
+.server-table .cell-password-input::placeholder {
+    color: var(--text-dim);
+    opacity: 0.75;
+    letter-spacing: 1px;
 }
 
 /* Action buttons in table */
@@ -431,30 +505,51 @@
 /* Add server row */
 .add-server-row {
     margin-top: 15px;
+    width: 100%;
+}
+
+.add-server-form {
     display: flex;
-    gap: 10px;
-    align-items: flex-end;
     flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    width: 100%;
+    padding: 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border, var(--text-dim));
+    border-radius: 6px;
 }
 
 .add-server-row .form-field {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 5px;
 }
 
 .add-server-row .form-field label {
     font-size: var(--font-size-small);
     color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .add-server-row input,
 .add-server-row select {
     padding: 8px 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border, var(--text-dim));
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    border-radius: 4px;
+}
+
+.add-server-row .field-group {
+    min-width: 140px;
 }
 
 .add-server-row .field-name {
-    width: 140px;
+    width: 145px;
 }
 
 .add-server-row .field-host {
@@ -462,15 +557,32 @@
 }
 
 .add-server-row .field-port {
-    width: 70px;
+    width: 75px;
 }
 
 .add-server-row .field-user {
-    width: 100px;
+    width: 110px;
 }
 
 .add-server-row .field-pass {
-    width: 120px;
+    width: 130px;
+}
+
+.add-server-form button[type="submit"] {
+    padding: 8px 16px;
+    background: var(--accent-highlight, var(--bg-tertiary));
+    color: var(--text-primary);
+    border: 1px solid var(--text-primary);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.add-server-form button[type="submit"]:hover {
+    box-shadow: 0 0 8px var(--glow-primary);
 }
 
 /* --- Themes Tab --- */

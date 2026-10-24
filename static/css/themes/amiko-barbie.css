@@ -23,6 +23,7 @@
     --border: #ffb3d9;
     --glow-primary: rgba(255, 51, 153, 0.2);
     --glow-warning: rgba(255, 0, 255, 0.4);
+    --wb-icon-filter: invert(0.85);
 
     /* Typography */
     --font-mono: 'Courier New', 'Consolas', 'Monaco', monospace;
