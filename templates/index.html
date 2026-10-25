@@ -7,15 +7,15 @@
     <title>AMIKO - Advanced Multi-function Interface Kit for Operations</title>
 
     <!-- Custom CSS Themes -->
-    <link rel="stylesheet" id="theme-stylesheet" href="{{ url_for('static', filename='css/themes/amiko-theme.css') }}?v=0.6.3">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=0.6.3">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/connection.css') }}?v=0.6.3">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules.css') }}?v=0.6.3">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/terminal.css') }}?v=0.6.3">
+    <link rel="stylesheet" id="theme-stylesheet" href="{{ url_for('static', filename='css/themes/amiko-theme.css') }}?v=0.7.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=0.7.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/connection.css') }}?v=0.7.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules.css') }}?v=0.7.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/terminal.css') }}?v=0.7.0">
     <!-- Xterm.js CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='lib/xterm/xterm.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/resource-bars.css') }}?v=0.6.3">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}?v=0.6.3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/resource-bars.css') }}?v=0.7.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}?v=0.7.0">
 
     <!-- GridStack.js CSS (kept for compat) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='lib/gridstack/gridstack.min.css') }}">
@@ -102,6 +102,12 @@
             </symbol>
             <symbol id="md-lock" viewBox="0 0 24 24">
                 <path fill="currentColor" d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+            </symbol>
+            <symbol id="md-mail" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+            </symbol>
+            <symbol id="md-block" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9A7.902 7.902 0 0 1 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1A7.902 7.902 0 0 1 20 12c0 4.42-3.58 8-8 8z"/>
             </symbol>
             <symbol id="md-phonelink-lock" viewBox="0 0 24 24">
                 <path fill="currentColor" d="M19 1H9c-1.1 0-2 .9-2 2v3h2V4h10v16H9v-2H7v3c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-2-2-2zm-8.2 10V9.5C10.8 8.1 9.4 7 8 7S5.2 8.1 5.2 9.5V11c-.6 0-1.2.6-1.2 1.2v3.5c0 .7.6 1.3 1.2 1.3h5.5c.7 0 1.3-.6 1.3-1.2v-3.5c0-.7-.6-1.3-1.2-1.3zm-1.3 0h-3V9.5c0-.8.7-1.5 1.5-1.5s1.5.7 1.5 1.5V11z"/>
@@ -337,7 +343,7 @@
     <!-- BOTTOM BAR                                    -->
     <!-- ══════════════════════════════════════════════ -->
     <div class="bottom-bar" id="bottom-bar">
-        <span class="bottombar-brand">AMIKO v0.6.3</span>
+        <span class="bottombar-brand">AMIKO v0.7.0</span>
         <span class="bottombar-center"></span>
         <div class="bottombar-status">
             <span class="bottombar-dot" id="bottombarDot"></span>
@@ -388,6 +394,16 @@
                         <span class="settings-tab-icon"><svg class="md-icon md-icon-lg"><use href="#md-shield"></use></svg></span>
                         <span class="settings-tab-label">Audit</span>
                     </button>
+                    <button class="settings-tab-btn" data-tab="notifications" title="Email Notifications">
+                        <span class="settings-tab-icon"><svg class="md-icon md-icon-lg"><use href="#md-mail"></use></svg></span>
+                        <span class="settings-tab-label">Alerts</span>
+                    </button>
+                    {% endif %}
+                    {% if current_user.capabilities.can_manage_firewall %}
+                    <button class="settings-tab-btn" data-tab="firewall" title="Firewall & Fail2Ban">
+                        <span class="settings-tab-icon"><svg class="md-icon md-icon-lg"><use href="#md-block"></use></svg></span>
+                        <span class="settings-tab-label">Firewall</span>
+                    </button>
                     {% endif %}
                     <button class="settings-tab-btn {% if current_user.role != 'admin' %}active{% endif %}" data-tab="themes" title="Themes">
                         <span class="settings-tab-icon"><svg class="md-icon md-icon-lg"><use href="#md-palette"></use></svg></span>
@@ -423,6 +439,12 @@
                                 <label>Assigned Server Groups</label>
                                 <div class="user-groups-checkboxes"></div>
                             </div>
+                            <div class="form-field user-firewall-field">
+                                <label class="user-group-chip" title="Delegate Firewall & Fail2Ban management to this operator">
+                                    <input type="checkbox" class="user-firewall-input">
+                                    <span>Can manage Firewall &amp; Fail2Ban</span>
+                                </label>
+                            </div>
                             <button type="submit">+ ADD USER</button>
                         </form>
                         <div class="user-list"></div>
@@ -448,6 +470,22 @@
                         </div>
                         <div class="server-table-wrapper" id="auditTableWrapper"></div>
                     </div>
+
+                    {% if current_user.role == 'admin' %}
+                    <!-- Email Notifications Section (Admin Only) -->
+                    <div class="settings-section" data-section="notifications">
+                        <h3 class="settings-section-title">Security Email Notifications</h3>
+                        <div id="notificationsPanel"></div>
+                    </div>
+                    {% endif %}
+
+                    {% if current_user.capabilities.can_manage_firewall %}
+                    <!-- Firewall & Fail2Ban Section (Admin or delegated can_manage_firewall) -->
+                    <div class="settings-section" data-section="firewall">
+                        <h3 class="settings-section-title">Firewall &amp; Fail2Ban Intrusion Prevention</h3>
+                        <div id="firewallPanel"></div>
+                    </div>
+                    {% endif %}
 
                     <!-- Groups Section -->
                     <div class="settings-section {% if current_user.role == 'admin' %}active{% endif %}" data-section="groups">
@@ -717,15 +755,17 @@
     </script>
 
     <!-- App Scripts -->
-    <script src="{{ url_for('static', filename='js/theme.js') }}?v=0.6.2"></script>
-    <script src="{{ url_for('static', filename='js/connection.js') }}?v=0.6.2"></script>
-    <script src="{{ url_for('static', filename='js/drag-drop.js') }}?v=0.6.2"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=0.6.2"></script>
-    <script src="{{ url_for('static', filename='js/settings.js') }}?v=0.6.2"></script>
+    <script src="{{ url_for('static', filename='js/theme.js') }}?v=0.7.0"></script>
+    <script src="{{ url_for('static', filename='js/connection.js') }}?v=0.7.0"></script>
+    <script src="{{ url_for('static', filename='js/drag-drop.js') }}?v=0.7.0"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=0.7.0"></script>
+    <script src="{{ url_for('static', filename='js/settings.js') }}?v=0.7.0"></script>
+    <script src="{{ url_for('static', filename='js/firewall.js') }}?v=0.7.0"></script>
+    <script src="{{ url_for('static', filename='js/notifications.js') }}?v=0.7.0"></script>
 
     <!-- Dynamic Plugin Scripts -->
     {% for mod in modules %}
-    <script src="/static_modules/{{ mod.id }}/client.js?v=0.6.2"></script>
+    <script src="/static_modules/{{ mod.id }}/client.js?v=0.7.0"></script>
     {% endfor %}
 </body>
 

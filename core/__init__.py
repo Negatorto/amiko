@@ -5,6 +5,8 @@ from flask_socketio import SocketIO
 from core.plugins import load_modules
 from core.config import settings
 from core.auth import init_auth
+from core.firewall import init_firewall
+from core.notifier import init_notifier
 
 app = Flask(__name__, template_folder='../templates', static_folder='../static')
 app.config['SECRET_KEY'] = os.environ.get('AMIKO_SECRET_KEY') or settings._load_or_create_key().decode('utf-8')
@@ -52,6 +54,12 @@ active_modules = load_modules(app)
 
 # Register RBAC & Least Privilege guards
 init_auth(app)
+
+# L7 firewall & Fail2Ban middleware (outermost layer: wraps Flask and Socket.IO)
+init_firewall(app)
+
+# Security email notifications (audit trail subscriber)
+init_notifier(app)
 
 # Import routes and handlers so they are registered
 from core import routes

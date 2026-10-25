@@ -17,6 +17,11 @@ def log_audit_event(*args, **kwargs):
     from core.audit import log_audit_event as _log_audit_event
     return _log_audit_event(*args, **kwargs)
 
+
+def check_outbound_firewall(hostname, port):
+    from core.firewall import firewall
+    firewall.check_outbound(hostname, port)
+
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 KNOWN_HOSTS_FILE = os.path.join(DATA_DIR, "known_hosts")
 _known_hosts_lock = threading.Lock()
@@ -311,6 +316,9 @@ def connect_ssh_client(hostname, port, username, password="", private_key="", ti
     port_int = int(port or 22)
     if port_int == 21:
         connect_ftp(hostname, port_int, username, password, timeout=timeout)
+
+    # Firewall OUTPUT chain: egress control towards managed servers
+    check_outbound_firewall(hostname, port_int)
 
     ssh = paramiko.SSHClient()
     with _known_hosts_lock:

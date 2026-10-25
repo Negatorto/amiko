@@ -25,6 +25,7 @@ class SettingsPanel {
 
     close() {
         this.overlay.classList.remove('active');
+        if (window.amikoFirewall) window.amikoFirewall.stop();
     }
 
     // --- Tab Navigation ---
@@ -54,6 +55,13 @@ class SettingsPanel {
         else if (tabName === 'audit') this.loadAudit();
         else if (tabName === 'themes') this.loadThemes();
         else if (tabName === 'interface') this.loadInterface();
+
+        if (tabName === 'notifications' && window.amikoNotifications) window.amikoNotifications.load();
+
+        if (window.amikoFirewall) {
+            if (tabName === 'firewall') window.amikoFirewall.load();
+            else window.amikoFirewall.stop();
+        }
     }
 
     initCloseBtn() {
@@ -197,11 +205,14 @@ class SettingsPanel {
             }
         }
 
+        const firewallField = newForm.querySelector('.user-firewall-field');
         const updateGroupVisibility = () => {
             if (groupsField && roleSelect) {
                 groupsField.style.opacity = roleSelect.value === 'admin' ? '0.4' : '1';
                 groupsField.style.pointerEvents = roleSelect.value === 'admin' ? 'none' : 'auto';
             }
+            // Firewall delegation applies to operators only (admins have it implicitly)
+            if (firewallField && roleSelect) firewallField.style.display = roleSelect.value === 'operator' ? '' : 'none';
         };
         if (roleSelect) {
             roleSelect.addEventListener('change', updateGroupVisibility);
@@ -217,8 +228,11 @@ class SettingsPanel {
                 ? ['*']
                 : Array.from(newForm.querySelectorAll('.user-groups-checkboxes input:checked')).map(cb => cb.value);
 
+            const fwInput = newForm.querySelector('.user-firewall-input');
+            const can_manage_firewall = role === 'operator' && !!(fwInput && fwInput.checked);
+
             if (!username || !password) return;
-            const res = await this.api('POST', '/api/users', { username, password, role, allowed_groups });
+            const res = await this.api('POST', '/api/users', { username, password, role, allowed_groups, can_manage_firewall });
             if (res.error) {
                 if (window.AmikoAlert) window.AmikoAlert('Error', res.error);
                 else alert(res.error);
@@ -255,6 +269,7 @@ class SettingsPanel {
                         <span class="group-card-name" style="display:inline-flex; align-items:center; gap:5px;"><svg class="md-icon"><use href="#md-person"></use></svg> ${this.escapeHtml(u.username)} ${isSelf ? '<em style="font-size:11px; color:var(--text-dim);">(you)</em>' : ''}</span>
                         <span class="topbar-role-badge role-${u.role}">${u.role.toUpperCase()}</span>
                         ${totpBadge}
+                        ${u.can_manage_firewall ? `<span class="badge-2fa badge-2fa-active" title="Delegated permission: Firewall & Fail2Ban management"><svg class="md-icon" style="width:12px;height:12px;"><use href="#md-block"></use></svg> Firewall</span>` : ''}
                         <div class="user-assigned-groups">${groupChips}</div>
                     </div>
                     <div class="group-card-actions">
@@ -354,6 +369,10 @@ class SettingsPanel {
                         <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin (Full Control)</option>
                     </select>
                 </div>
+                <label class="user-group-chip inline-firewall-box" style="align-self:flex-start; ${user.role === 'operator' ? '' : 'display:none;'}" title="Delegate Firewall & Fail2Ban management to this operator">
+                    <input type="checkbox" class="inline-firewall-input" ${user.can_manage_firewall ? 'checked' : ''}>
+                    <span>Can manage Firewall &amp; Fail2Ban</span>
+                </label>
                 <div class="inline-groups-box" style="display:flex; flex-wrap:wrap; gap:6px; ${user.role === 'admin' ? 'opacity:0.4; pointer-events:none;' : ''}">
                     ${groups.map(g => `
                         <label class="user-group-chip">
@@ -371,9 +390,11 @@ class SettingsPanel {
 
         const roleSel = card.querySelector('.inline-role-select');
         const gBox = card.querySelector('.inline-groups-box');
+        const fwBox = card.querySelector('.inline-firewall-box');
         roleSel.addEventListener('change', () => {
             gBox.style.opacity = roleSel.value === 'admin' ? '0.4' : '1';
             gBox.style.pointerEvents = roleSel.value === 'admin' ? 'none' : 'auto';
+            fwBox.style.display = roleSel.value === 'operator' ? '' : 'none';
         });
 
         card.querySelector('.btn-cancel-inline').addEventListener('click', () => this.loadUsers());
@@ -382,7 +403,8 @@ class SettingsPanel {
             const newGroups = newRole === 'admin'
                 ? ['*']
                 : Array.from(card.querySelectorAll('.inline-groups-box input:checked')).map(cb => cb.value);
-            const r = await this.api('PUT', `/api/users/${user.id}`, { role: newRole, allowed_groups: newGroups });
+            const can_manage_firewall = newRole === 'operator' && card.querySelector('.inline-firewall-input').checked;
+            const r = await this.api('PUT', `/api/users/${user.id}`, { role: newRole, allowed_groups: newGroups, can_manage_firewall });
             if (r.error) {
                 if (window.AmikoAlert) window.AmikoAlert('Error', r.error);
                 else alert(r.error);
@@ -1362,7 +1384,7 @@ class SettingsPanel {
     applyTheme(themeId) {
         const link = document.getElementById('theme-stylesheet');
         if (link) {
-            link.href = `/static/css/themes/${themeId}.css?v=0.6.2`;
+            link.href = `/static/css/themes/${themeId}.css?v=0.7.0`;
             // Refresh JS theme bridge after CSS loads
             link.onload = () => {
                 if (typeof refreshThemeVars === 'function') {
@@ -1460,7 +1482,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.active_theme) {
                 const link = document.getElementById('theme-stylesheet');
                 if (link) {
-                    link.href = `/static/css/themes/${data.active_theme}.css?v=0.6.2`;
+                    link.href = `/static/css/themes/${data.active_theme}.css?v=0.7.0`;
                     link.onload = () => {
                         if (typeof refreshThemeVars === 'function') {
                             refreshThemeVars();

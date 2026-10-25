@@ -6,6 +6,7 @@ from core import socketio
 from core.config import ssh_sessions, settings
 from core.auth import get_current_user, is_same_origin_request
 from core.audit import log_audit_event
+from core.firewall import report_failure
 from utils.sftp_helper import connect_ssh_client
 
 
@@ -18,6 +19,7 @@ def handle_socket_connect():
             severity='ALERT',
             details={'origin': request.headers.get('Origin', ''), 'host': request.host}
         )
+        report_failure('amiko-sec', 'Cross-site WebSocket hijacking attempt (CSWSH)')
         return False
 
 def background_thread(sid, shell):

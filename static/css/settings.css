@@ -1285,3 +1285,243 @@ html.no-animations *::after {
     border-color: #e67e22 !important;
     color: #e67e22 !important;
 }
+
+/* ── Firewall & Fail2Ban panel ─────────────────── */
+.fw-subtabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--border, var(--text-dim));
+}
+
+.fw-subtab {
+    padding: 8px 14px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    border-radius: 4px 4px 0 0;
+}
+
+.fw-subtab.active {
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+    border-color: var(--border, var(--text-dim));
+}
+
+.fw-count {
+    display: inline-block;
+    min-width: 18px;
+    padding: 0 5px;
+    margin-left: 4px;
+    border-radius: 9px;
+    background: var(--accent-danger, #c0392b);
+    color: #fff;
+    font-size: 10px;
+    text-align: center;
+}
+
+.fw-toolbar,
+.fw-kernel {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 10px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.fw-toolbar select,
+.fw-toolbar button,
+.fw-table input[type="number"],
+.fw-textarea,
+.fw-form input,
+.fw-form select,
+.fw-form button,
+.fw-actions button {
+    padding: 6px 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border, var(--text-dim));
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    border-radius: 4px;
+}
+
+.fw-toolbar button,
+.fw-actions button,
+.fw-form button {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.fw-actions button:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.fw-actions .btn-delete:hover:not(:disabled) {
+    color: var(--accent-danger, #c0392b);
+    border-color: var(--accent-danger, #c0392b);
+}
+
+.fw-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.fw-info {
+    margin-left: auto;
+    color: var(--text-dim);
+}
+
+.fw-table td {
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.fw-table input[type="number"] {
+    width: 80px;
+}
+
+.fw-actions {
+    display: flex;
+    gap: 4px;
+    justify-content: flex-end;
+}
+
+.fw-actions button {
+    padding: 3px 7px;
+}
+
+.fw-num {
+    color: var(--text-dim);
+    font-weight: 700;
+}
+
+.fw-mono {
+    font-family: var(--font-mono);
+}
+
+.fw-dim {
+    color: var(--text-dim);
+    font-size: 11px;
+    white-space: normal;
+}
+
+.fw-comment {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.fw-row-disabled td {
+    opacity: 0.45;
+}
+
+.fw-target {
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+}
+
+.fw-target-accept { color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.5); }
+.fw-target-drop   { color: #e74c3c; border: 1px solid rgba(231, 76, 60, 0.5); }
+.fw-target-reject { color: #f39c12; border: 1px solid rgba(243, 156, 18, 0.5); }
+
+.fw-badge {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 1px 6px;
+    border: 1px solid var(--border, var(--text-dim));
+    border-radius: 3px;
+    color: var(--text-dim);
+    font-size: 10px;
+    text-transform: uppercase;
+}
+
+.fw-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-end;
+    margin: 14px 0;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border, var(--text-dim));
+    border-radius: 6px;
+}
+
+.fw-form-title {
+    width: 100%;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.fw-form .form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.fw-form .form-field label {
+    font-size: var(--font-size-small);
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.fw-form .form-field input {
+    min-width: 130px;
+}
+
+.fw-form .fw-grow {
+    flex: 1 1 200px;
+}
+
+.fw-form-actions {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.fw-form button[type="submit"] {
+    background: var(--accent-highlight, var(--bg-tertiary));
+    border-color: var(--text-primary);
+    font-weight: 700;
+}
+
+.fw-custom-port {
+    margin-top: 4px;
+}
+
+.fw-subtitle {
+    margin: 22px 0 6px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-primary);
+}
+
+.fw-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    margin-bottom: 8px;
+}

@@ -8,6 +8,9 @@ Implements the Principle of Least Privilege (NIS2 Art. 21.2.i):
   - viewer:   Read-only access only to assigned server groups; can monitor vitals,
               browse/read files in Explorer, read Notes, and run searches,
               but cannot open SSH terminal or create/modify/delete files or notes.
+Delegated permission:
+  - can_manage_firewall: granted by an admin to individual operators; allows managing the
+              Firewall & Fail2Ban configuration without global admin privileges.
 """
 
 import os
@@ -15,8 +18,11 @@ import time
 from urllib.parse import urlparse
 from functools import wraps
 from flask import session, request, redirect, url_for, jsonify, g
+from werkzeug.exceptions import NotFound
 from core.config import settings, ssh_sessions
 from core.audit import log_audit_event
+from core.client_ip import get_client_ip
+from core.firewall import report_failure
 
 SESSION_IDLE_TIMEOUT_SECONDS = int(os.environ.get("AMIKO_SESSION_TIMEOUT_MIN", "60")) * 60
 
@@ -44,6 +50,7 @@ ROLE_CAPABILITIES = {
     "admin": {
         "can_manage_settings": True,
         "can_manage_users": True,
+        "can_manage_firewall": True,
         "can_write": True,
         "can_ssh": True,
         "blocked_modules": []
@@ -51,6 +58,7 @@ ROLE_CAPABILITIES = {
     "operator": {
         "can_manage_settings": False,
         "can_manage_users": False,
+        "can_manage_firewall": False,
         "can_write": True,
         "can_ssh": True,
         "blocked_modules": []
@@ -58,6 +66,7 @@ ROLE_CAPABILITIES = {
     "viewer": {
         "can_manage_settings": False,
         "can_manage_users": False,
+        "can_manage_firewall": False,
         "can_write": False,
         "can_ssh": False,
         "blocked_modules": ["ssh"]
@@ -82,7 +91,10 @@ def get_current_user():
         session.clear()
         return None
     role = user.get("role", "viewer")
-    user["capabilities"] = ROLE_CAPABILITIES.get(role, ROLE_CAPABILITIES["viewer"])
+    capabilities = dict(ROLE_CAPABILITIES.get(role, ROLE_CAPABILITIES["viewer"]))
+    if role == "operator" and user.get("can_manage_firewall"):
+        capabilities["can_manage_firewall"] = True
+    user["capabilities"] = capabilities
     return user
 
 
@@ -126,6 +138,26 @@ def role_required(*allowed_roles):
     return decorator
 
 
+def capability_required(capability):
+    """Require a (role-derived or delegated) capability, e.g. 'can_manage_firewall'."""
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            user = get_current_user()
+            if not user:
+                return jsonify({"error": "Authentication required", "status": "error", "success": False}), 401
+            if not user.get("capabilities", {}).get(capability):
+                return jsonify({
+                    "error": f"Least Privilege: missing permission '{capability}'.",
+                    "status": "error",
+                    "success": False
+                }), 403
+            g.current_user = user
+            return f(*args, **kwargs)
+        return decorated
+    return decorator
+
+
 def init_auth(app):
     """Register global request guards enforcing authentication and Least Privilege."""
 
@@ -142,6 +174,7 @@ def init_auth(app):
                 target={"resource": path},
                 details={"origin": request.headers.get("Origin", ""), "host": request.host}
             )
+            report_failure("amiko-sec", "Cross-origin state-changing request (CSRF)")
             return jsonify({
                 "error": "Cross-origin request blocked by security policy.",
                 "status": "error",
@@ -166,12 +199,15 @@ def init_auth(app):
                 event_type="AUTH_SESSION_EXPIRED",
                 status="INFO",
                 severity="NOTICE",
-                actor={"username": expired_user, "source_ip": request.remote_addr or "unknown"},
+                actor={"username": expired_user, "source_ip": get_client_ip()},
                 details={"idle_timeout_seconds": SESSION_IDLE_TIMEOUT_SECONDS}
             )
 
         user = get_current_user()
         if not user:
+            if isinstance(request.routing_exception, NotFound):
+                # Unauthenticated request to a non-existent endpoint: scanner/probing behaviour
+                report_failure("amiko-sec", f"Unauthenticated probe of unknown path {path[:80]}")
             if path == "/":
                 return redirect(url_for("login_page"))
             return jsonify({
@@ -185,7 +221,7 @@ def init_auth(app):
         role = user.get("role", "viewer")
 
         # 3. Admin-only endpoints: User management, Audit Log, Backup & Server/Group mutations
-        if path.startswith(("/api/users", "/api/audit", "/api/backup", "/api/known-hosts")):
+        if path.startswith(("/api/users", "/api/audit", "/api/backup", "/api/known-hosts", "/api/notifications")):
             if role != "admin":
                 log_audit_event(
                     event_type="RBAC_ACCESS_DENIED",
@@ -194,6 +230,7 @@ def init_auth(app):
                     target={"resource": path},
                     details={"reason": "Admin role required", "method": request.method}
                 )
+                report_failure("amiko-sec", f"Non-admin access to reserved endpoint {path[:80]}")
                 return jsonify({
                     "error": "Least Privilege: Only Administrators can access this resource.",
                     "status": "error",
@@ -209,11 +246,28 @@ def init_auth(app):
                     target={"resource": path},
                     details={"reason": "Admin role required for group/server mutation", "method": request.method}
                 )
+                report_failure("amiko-sec", f"Non-admin mutation attempt on {path[:80]}")
                 return jsonify({
                     "error": "Least Privilege: Only Administrators can create, modify, or delete groups and servers.",
                     "status": "error",
                     "success": False
                 }), 403
+
+        # 3b. Firewall & Fail2Ban management: admin or delegated 'can_manage_firewall'
+        if path.startswith("/api/firewall") and not user["capabilities"].get("can_manage_firewall"):
+            log_audit_event(
+                event_type="RBAC_ACCESS_DENIED",
+                status="DENIED",
+                severity="WARNING",
+                target={"resource": path},
+                details={"reason": "can_manage_firewall permission required", "method": request.method}
+            )
+            report_failure("amiko-sec", f"Unauthorized firewall management attempt on {path[:80]}")
+            return jsonify({
+                "error": "Least Privilege: Firewall management requires the 'can_manage_firewall' permission.",
+                "status": "error",
+                "success": False
+            }), 403
 
         # 4. Viewer Read-Only enforcement
         if role == "viewer":

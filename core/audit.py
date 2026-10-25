@@ -21,6 +21,14 @@ GENESIS_HASH = "0" * 64
 
 _audit_lock = threading.Lock()
 _last_hash_cache = None
+_last_size_cache = None  # file size when the cache was filled: detects appends by other processes (CLI)
+_audit_listeners = []    # callables(record) invoked after each successful write (e.g. email notifier)
+
+
+def register_audit_listener(callback):
+    """Subscribe to audit records after they are durably written (outside the audit lock)."""
+    if callback not in _audit_listeners:
+        _audit_listeners.append(callback)
 
 # ── Brute-Force / Login Rate Limiter ─────────────────────────────────────────
 MAX_FAILED_ATTEMPTS = 5
@@ -98,9 +106,14 @@ def _compute_record_hash(record_without_hash: dict) -> str:
 
 
 def _get_last_hash_locked() -> str:
-    global _last_hash_cache
-    if _last_hash_cache is not None:
+    global _last_hash_cache, _last_size_cache
+    try:
+        current_size = os.path.getsize(AUDIT_LOG_FILE)
+    except OSError:
+        current_size = None
+    if _last_hash_cache is not None and current_size == _last_size_cache:
         return _last_hash_cache
+    _last_size_cache = current_size
 
     if not os.path.exists(AUDIT_LOG_FILE):
         _last_hash_cache = GENESIS_HASH
@@ -136,18 +149,15 @@ def log_audit_event(
     Append an immutable, hash-chained audit record to data/audit.log.
     Never logs plaintext passwords.
     """
-    global _last_hash_cache
+    global _last_hash_cache, _last_size_cache
     os.makedirs(DATA_DIR, exist_ok=True)
 
     # Resolve actor context from Flask request if not explicitly provided
     actor_info = dict(actor) if actor else {}
     if has_request_context():
         if "source_ip" not in actor_info:
-            actor_info["source_ip"] = (
-                request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-                or request.remote_addr
-                or "unknown"
-            )
+            from core.client_ip import get_client_ip
+            actor_info["source_ip"] = get_client_ip()
         if "user_agent" not in actor_info:
             actor_info["user_agent"] = request.headers.get("User-Agent", "")[:160]
         if "username" not in actor_info:
@@ -192,14 +202,23 @@ def log_audit_event(
         record = dict(record_core)
         record["integrity_hash"] = integrity_hash
 
+        written = False
         try:
             with open(AUDIT_LOG_FILE, "a", encoding="utf-8") as f:
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
             _last_hash_cache = integrity_hash
+            _last_size_cache = os.path.getsize(AUDIT_LOG_FILE)
+            written = True
         except Exception as e:
             print(f"[AMIKO Audit] Failed to write audit log: {e}")
 
-        return record
+    if written:
+        for callback in list(_audit_listeners):
+            try:
+                callback(record)
+            except Exception as e:
+                print(f"[AMIKO Audit] Listener error: {e}")
+    return record
 
 
 def verify_audit_chain() -> dict:

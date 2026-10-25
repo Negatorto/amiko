@@ -5,7 +5,10 @@ from flask import render_template, request, Response, stream_with_context, jsoni
 
 from core import app, active_modules
 from core.config import settings, ssh_sessions, MODULES_DIR
-from core.auth import get_current_user, filter_modules_for_user, role_required
+from core.auth import get_current_user, filter_modules_for_user, role_required, capability_required
+from core.client_ip import get_client_ip
+from core.firewall import firewall, report_failure, operator_context
+from core.notifier import get_notifier
 from core.audit import (
     log_audit_event,
     get_audit_events,
@@ -16,6 +19,7 @@ from core.audit import (
 )
 from utils.sftp_helper import (
     connect_sftp,
+    connect_ssh_client,
     execute_ssh_command,
     get_system_stats,
     get_known_hosts_list,
@@ -38,11 +42,7 @@ def api_auth_login():
     if not username or not password:
         return jsonify({'success': False, 'error': 'Username and password are required.'}), 400
 
-    source_ip = (
-        request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
-        or request.remote_addr
-        or 'unknown'
-    )
+    source_ip = get_client_ip()
 
     locked, rem_seconds = check_login_lockout(username, source_ip)
     if locked:
@@ -53,6 +53,7 @@ def api_auth_login():
             actor={'username': username, 'source_ip': source_ip, 'role': 'none'},
             details={'reason': 'Account/IP locked due to repeated failed attempts', 'remaining_seconds': rem_seconds}
         )
+        report_failure('amiko-login', f"Login attempt during lockout for user '{username[:40]}'")
         return jsonify({
             'success': False,
             'error': f'Too many failed attempts. Try again in {rem_seconds}s.'
@@ -60,6 +61,7 @@ def api_auth_login():
 
     user = settings.verify_user(username, password)
     if not user:
+        report_failure('amiko-login', f"Invalid credentials for user '{username[:40]}'")
         just_locked, lock_rem, fail_count = record_login_attempt(username, source_ip, success=False)
         if just_locked:
             log_audit_event(
@@ -157,11 +159,7 @@ def api_auth_2fa_verify():
 
     user_id = pending['user_id']
     username = pending['username']
-    source_ip = (
-        request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
-        or request.remote_addr
-        or 'unknown'
-    )
+    source_ip = get_client_ip()
 
     if pending.get('setup'):
         # Onboarding confirmation
@@ -174,6 +172,7 @@ def api_auth_2fa_verify():
                 actor={'user_id': user_id, 'username': username, 'source_ip': source_ip},
                 details={'reason': 'Invalid confirmation code during setup'}
             )
+            report_failure('amiko-2fa', f"Invalid 2FA enrollment code for user '{username}'")
             return jsonify({'success': False, 'error': 'Invalid code. Check your app and try again.'}), 400
 
         log_audit_event(
@@ -194,6 +193,7 @@ def api_auth_2fa_verify():
                 actor={'user_id': user_id, 'username': username, 'source_ip': source_ip},
                 details={'reason': 'Invalid 2FA code or recovery code'}
             )
+            report_failure('amiko-2fa', f"Invalid 2FA/recovery code for user '{username}'")
             return jsonify({'success': False, 'error': 'Invalid code. Please try again.'}), 401
 
         if method == 'recovery_code':
@@ -509,14 +509,16 @@ def api_create_user():
             username=username,
             password=password,
             role=role,
-            allowed_groups=allowed_groups
+            allowed_groups=allowed_groups,
+            can_manage_firewall=bool(data.get('can_manage_firewall'))
         )
         log_audit_event(
             event_type='USER_CREATED',
             status='SUCCESS',
             severity='NOTICE',
             target={'resource': f"user:{user['username']}", 'user_id': user['id']},
-            details={'role': user['role'], 'allowed_groups': user['allowed_groups']}
+            details={'role': user['role'], 'allowed_groups': user['allowed_groups'],
+                     'can_manage_firewall': user.get('can_manage_firewall', False)}
         )
         return jsonify(user), 201
     except ValueError as e:
@@ -533,7 +535,8 @@ def api_update_user(user_id):
             username=data.get('username'),
             password=data.get('password'),
             role=data.get('role'),
-            allowed_groups=data.get('allowed_groups')
+            allowed_groups=data.get('allowed_groups'),
+            can_manage_firewall=data.get('can_manage_firewall')
         )
         if result is None:
             return jsonify({'error': 'User not found'}), 404
@@ -545,6 +548,7 @@ def api_update_user(user_id):
             details={
                 'role': result['role'],
                 'allowed_groups': result['allowed_groups'],
+                'can_manage_firewall': result.get('can_manage_firewall', False),
                 'password_changed': bool(data.get('password'))
             }
         )
@@ -656,6 +660,209 @@ def api_delete_known_host():
         severity='WARNING',
         target={'hostname': host_entry}
     )
+    return jsonify({'success': True})
+
+
+# --- Firewall & Fail2Ban API (Admin or delegated 'can_manage_firewall') ---
+
+def _firewall_call(fn, event_type, target=None, severity='NOTICE', details_fn=None):
+    """Run a firewall mutation, mapping validation/lockout errors to HTTP codes and auditing the outcome."""
+    try:
+        result = fn()
+    except KeyError as e:
+        return jsonify({'error': str(e).strip("'")}), 404
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except PermissionError as e:
+        log_audit_event(
+            event_type='FIREWALL_LOCKOUT_PREVENTED',
+            status='DENIED',
+            severity='WARNING',
+            target=target or {'resource': 'firewall'},
+            details={'attempted': event_type, 'reason': str(e)}
+        )
+        return jsonify({'error': str(e), 'lockout_prevented': True}), 409
+    log_audit_event(
+        event_type=event_type,
+        status='SUCCESS',
+        severity=severity,
+        target=target or {'resource': 'firewall'},
+        details=details_fn(result) if details_fn else (result if isinstance(result, dict) else {})
+    )
+    return jsonify(result)
+
+
+@app.route('/api/firewall', methods=['GET'])
+@capability_required('can_manage_firewall')
+def api_firewall_state():
+    state = firewall.get_state()
+    state['client_ip'] = get_client_ip()
+    state['can_manage_kernel'] = get_current_user().get('role') == 'admin'
+    return jsonify(state)
+
+
+@app.route('/api/firewall/settings', methods=['PUT'])
+@capability_required('can_manage_firewall')
+def api_firewall_settings():
+    data = request.get_json(silent=True) or {}
+    return _firewall_call(lambda: firewall.update_settings(data, operator_context()),
+                          'FIREWALL_SETTINGS_UPDATED', severity='WARNING')
+
+
+@app.route('/api/firewall/rules', methods=['POST'])
+@capability_required('can_manage_firewall')
+def api_firewall_add_rule():
+    data = request.get_json(silent=True) or {}
+    return _firewall_call(lambda: firewall.add_rule(data, operator_context()), 'FIREWALL_RULE_CREATED')
+
+
+@app.route('/api/firewall/rules/<rule_id>', methods=['PUT'])
+@capability_required('can_manage_firewall')
+def api_firewall_update_rule(rule_id):
+    data = request.get_json(silent=True) or {}
+    return _firewall_call(lambda: firewall.update_rule(rule_id, data, operator_context()),
+                          'FIREWALL_RULE_UPDATED', target={'resource': f'firewall-rule:{rule_id}'})
+
+
+@app.route('/api/firewall/rules/<rule_id>', methods=['DELETE'])
+@capability_required('can_manage_firewall')
+def api_firewall_delete_rule(rule_id):
+    return _firewall_call(lambda: firewall.delete_rule(rule_id, operator_context()),
+                          'FIREWALL_RULE_DELETED', target={'resource': f'firewall-rule:{rule_id}'},
+                          severity='WARNING')
+
+
+@app.route('/api/firewall/rules/<rule_id>/move', methods=['POST'])
+@capability_required('can_manage_firewall')
+def api_firewall_move_rule(rule_id):
+    direction = (request.get_json(silent=True) or {}).get('direction')
+    if direction not in ('up', 'down'):
+        return jsonify({'error': "direction must be 'up' or 'down'"}), 400
+    return _firewall_call(lambda: firewall.move_rule(rule_id, direction, operator_context()),
+                          'FIREWALL_RULE_MOVED', target={'resource': f'firewall-rule:{rule_id}'})
+
+
+@app.route('/api/firewall/services', methods=['POST'])
+@capability_required('can_manage_firewall')
+def api_firewall_add_service():
+    data = request.get_json(silent=True) or {}
+    return _firewall_call(lambda: firewall.add_service(data, operator_context()), 'FIREWALL_SERVICE_CREATED')
+
+
+@app.route('/api/firewall/services/<service_id>', methods=['PUT'])
+@capability_required('can_manage_firewall')
+def api_firewall_update_service(service_id):
+    data = request.get_json(silent=True) or {}
+    return _firewall_call(lambda: firewall.update_service(service_id, data, operator_context()),
+                          'FIREWALL_SERVICE_UPDATED', target={'resource': f'firewall-service:{service_id}'})
+
+
+@app.route('/api/firewall/services/<service_id>', methods=['DELETE'])
+@capability_required('can_manage_firewall')
+def api_firewall_delete_service(service_id):
+    return _firewall_call(lambda: firewall.delete_service(service_id, operator_context()),
+                          'FIREWALL_SERVICE_DELETED', target={'resource': f'firewall-service:{service_id}'})
+
+
+@app.route('/api/firewall/fail2ban', methods=['PUT'])
+@capability_required('can_manage_firewall')
+def api_firewall_fail2ban():
+    data = request.get_json(silent=True) or {}
+    return _firewall_call(lambda: firewall.update_fail2ban(data), 'FAIL2BAN_SETTINGS_UPDATED', severity='WARNING')
+
+
+@app.route('/api/firewall/jails/<jail_name>', methods=['PUT'])
+@capability_required('can_manage_firewall')
+def api_firewall_jail(jail_name):
+    data = request.get_json(silent=True) or {}
+    return _firewall_call(lambda: firewall.update_jail(jail_name, data), 'FAIL2BAN_JAIL_UPDATED',
+                          target={'resource': f'fail2ban-jail:{jail_name}'})
+
+
+@app.route('/api/firewall/bans', methods=['GET'])
+@capability_required('can_manage_firewall')
+def api_firewall_bans():
+    return jsonify(firewall.list_bans())
+
+
+@app.route('/api/firewall/bans', methods=['POST'])
+@capability_required('can_manage_firewall')
+def api_firewall_manual_ban():
+    data = request.get_json(silent=True) or {}
+    actor = get_current_user()['username']
+    try:
+        ban = firewall.manual_ban(data.get('ip', ''), data.get('duration', 60), data.get('reason', ''),
+                                  actor=actor, operator_ctx=operator_context())
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    return jsonify(ban), 201
+
+
+@app.route('/api/firewall/bans', methods=['DELETE'])
+@capability_required('can_manage_firewall')
+def api_firewall_unban():
+    ip = ((request.get_json(silent=True) or {}).get('ip') or '').strip()
+    if not firewall.unban(ip, actor=get_current_user()['username']):
+        return jsonify({'error': f'{ip} is not currently banned'}), 404
+    return jsonify({'success': True})
+
+
+@app.route('/api/firewall/bans/whitelist', methods=['POST'])
+@capability_required('can_manage_firewall')
+def api_firewall_whitelist_ban():
+    ip = ((request.get_json(silent=True) or {}).get('ip') or '').strip()
+    return _firewall_call(lambda: {'entry': firewall.whitelist_ip(ip, actor=get_current_user()['username'])},
+                          'FAIL2BAN_WHITELIST_ADDED', target={'resource': f'ip:{ip}'})
+
+
+@app.route('/api/firewall/kernel', methods=['PUT'])
+@role_required('admin')
+def api_firewall_kernel():
+    enabled = bool((request.get_json(silent=True) or {}).get('enabled'))
+    return _firewall_call(lambda: firewall.set_kernel_sync(enabled), 'FIREWALL_KERNEL_SYNC_UPDATED',
+                          severity='WARNING')
+
+
+# --- Email Notifications API (Admin Only) ---
+
+@app.route('/api/notifications', methods=['GET'])
+@role_required('admin')
+def api_get_notifications():
+    return jsonify({
+        'config': settings.get_smtp_config(safe=True),
+        'history': list(get_notifier().history)
+    })
+
+
+@app.route('/api/notifications', methods=['PUT'])
+@role_required('admin')
+def api_update_notifications():
+    data = request.get_json(silent=True) or {}
+    old_cfg = settings.get_smtp_config(safe=False)
+    try:
+        cfg = settings.update_smtp_config(data)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    changed = sorted(k for k in data if k != 'password' and data.get(k) != old_cfg.get(k))
+    record = log_audit_event(
+        event_type='NOTIFY_SETTINGS_UPDATED',
+        status='SUCCESS',
+        severity='WARNING',
+        target={'resource': 'smtp'},
+        details={'enabled': cfg['enabled'], 'recipient': cfg['recipient'], 'changed_fields': changed,
+                 'password_changed': bool(data.get('password'))}
+    )
+    # Alert the previous recipient, so silencing or redirecting notifications cannot go unnoticed
+    get_notifier().notify_config_change(old_cfg, record)
+    return jsonify(cfg)
+
+
+@app.route('/api/notifications/test', methods=['POST'])
+@role_required('admin')
+def api_test_notification():
+    ok, error = get_notifier().send_test()
+    if not ok:
+        return jsonify({'success': False, 'error': f'Test email failed: {error}'}), 502
     return jsonify({'success': True})
 
 

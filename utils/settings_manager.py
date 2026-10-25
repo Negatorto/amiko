@@ -5,6 +5,7 @@ Uses Fernet (AES-128-CBC) symmetric encryption.
 """
 
 import os
+import re
 import json
 import uuid
 import base64
@@ -25,6 +26,24 @@ KEY_FILE = os.path.join(DATA_DIR, '.amiko_key')
 
 VALID_ROLES = ("admin", "operator", "viewer")
 
+SMTP_SECURITY_MODES = ("starttls", "ssl")
+NOTIFY_CATEGORIES = ("critical", "high", "changes")
+_EMAIL_RE = re.compile(r"^[^@\s<>\"',;]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
+_HOSTNAME_RE = re.compile(r"^[A-Za-z0-9.\-:\[\]]{1,253}$")
+
+DEFAULT_SMTP = {
+    "enabled": False,
+    "host": "",
+    "port": 587,
+    "security": "starttls",
+    "username": "",
+    "password": "",
+    "from_addr": "",
+    "recipient": "",
+    "categories": {"critical": True, "high": True, "changes": True},
+    "cooldown_min": 10
+}
+
 DEFAULT_SETTINGS = {
     "users": [],
     "groups": [],
@@ -38,6 +57,7 @@ DEFAULT_SETTINGS = {
         "amiko-barbie": True
     },
     "crt_enabled": True,
+    "smtp": DEFAULT_SMTP,
     "ui_prefs": {
         "explorer_max_file_mb": 10,
         "winbox_buttons": ["min", "max", "full", "close"]
@@ -150,7 +170,7 @@ class SettingsManager:
             return self._sanitize_user(user)
         return None
 
-    def create_user(self, username, password, role="operator", allowed_groups=None):
+    def create_user(self, username, password, role="operator", allowed_groups=None, can_manage_firewall=False):
         uname = (username or "").strip()
         if not uname or not password:
             raise ValueError("Username and password are required.")
@@ -166,13 +186,16 @@ class SettingsManager:
             "password_hash": generate_password_hash(password),
             "role": role,
             "allowed_groups": groups,
+            # Delegated permission: only meaningful for operators (admins have it implicitly)
+            "can_manage_firewall": role == "operator" and bool(can_manage_firewall),
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         self._settings.setdefault("users", []).append(user)
         self._save()
         return self._sanitize_user(user)
 
-    def update_user(self, user_id, username=None, password=None, role=None, allowed_groups=None):
+    def update_user(self, user_id, username=None, password=None, role=None, allowed_groups=None,
+                    can_manage_firewall=None):
         users = self._settings.get("users", [])
         target = None
         for u in users:
@@ -209,6 +232,11 @@ class SettingsManager:
             target["allowed_groups"] = ["*"]
         elif allowed_groups is not None:
             target["allowed_groups"] = list(allowed_groups)
+
+        if target["role"] != "operator":
+            target["can_manage_firewall"] = False
+        elif can_manage_firewall is not None:
+            target["can_manage_firewall"] = bool(can_manage_firewall)
 
         self._save()
         return self._sanitize_user(target)
@@ -713,6 +741,74 @@ class SettingsManager:
         self._save()
         return current
 
+    # --- SMTP Email Notifications ---
+
+    def get_smtp_config(self, safe=True):
+        """SMTP settings merged with defaults. safe=True strips the password (Zero-Password frontend)."""
+        stored = self._settings.get("smtp") or {}
+        cfg = json.loads(json.dumps(DEFAULT_SMTP))
+        cfg.update({k: v for k, v in stored.items() if k != "categories"})
+        cfg["categories"].update(stored.get("categories") or {})
+        if safe:
+            cfg["has_password"] = bool(cfg.pop("password", ""))
+        return cfg
+
+    def update_smtp_config(self, data: dict):
+        """Validate and persist SMTP settings. Empty password keeps the stored one, '__CLEAR__' removes it."""
+        cfg = self.get_smtp_config(safe=False)
+
+        for key in ("host", "username", "from_addr", "recipient"):
+            if key in data:
+                val = str(data[key] or "").strip()
+                if "\r" in val or "\n" in val:
+                    raise ValueError(f"Invalid characters in {key}.")
+                cfg[key] = val
+        if "password" in data:
+            pw = data["password"] or ""
+            if pw == "__CLEAR__":
+                cfg["password"] = ""
+            elif str(pw) != "":
+                cfg["password"] = str(pw)
+        if "port" in data:
+            try:
+                port = int(data["port"])
+            except (TypeError, ValueError):
+                raise ValueError("SMTP port must be a number.")
+            if not 1 <= port <= 65535:
+                raise ValueError("SMTP port must be between 1 and 65535.")
+            cfg["port"] = port
+        if "security" in data:
+            sec = str(data["security"]).lower()
+            if sec not in SMTP_SECURITY_MODES:
+                raise ValueError("Plain-text SMTP is not allowed: choose STARTTLS or SSL/TLS.")
+            cfg["security"] = sec
+        if "cooldown_min" in data:
+            try:
+                cooldown = int(data["cooldown_min"])
+            except (TypeError, ValueError):
+                raise ValueError("Cooldown must be a number of minutes.")
+            if not 1 <= cooldown <= 1440:
+                raise ValueError("Cooldown must be between 1 and 1440 minutes.")
+            cfg["cooldown_min"] = cooldown
+        if isinstance(data.get("categories"), dict):
+            for cat in NOTIFY_CATEGORIES:
+                if cat in data["categories"]:
+                    cfg["categories"][cat] = bool(data["categories"][cat])
+        if "enabled" in data:
+            cfg["enabled"] = bool(data["enabled"])
+
+        if cfg["host"] and not _HOSTNAME_RE.match(cfg["host"]):
+            raise ValueError("Invalid SMTP host.")
+        for key, label in (("from_addr", "Sender address"), ("recipient", "Recipient address")):
+            if cfg[key] and not _EMAIL_RE.match(cfg[key]):
+                raise ValueError(f"{label} is not a valid email address.")
+        if cfg["enabled"] and not (cfg["host"] and cfg["from_addr"] and cfg["recipient"]):
+            raise ValueError("Host, sender and recipient are required to enable notifications.")
+
+        self._settings["smtp"] = cfg
+        self._save()
+        return self.get_smtp_config(safe=True)
+
     # --- Optional Backup & Restore (Passphrase-Encrypted or Plain JSON) ---
 
     @staticmethod
@@ -746,7 +842,7 @@ class SettingsManager:
             token = cipher.encrypt(raw_bytes).decode("ascii")
             return {
                 "amiko_backup": True,
-                "version": "0.6.2",
+                "version": "0.7.0",
                 "created_at": now_iso,
                 "encrypted": True,
                 "kdf": "PBKDF2-HMAC-SHA256-600000",
@@ -755,7 +851,7 @@ class SettingsManager:
             }
         return {
             "amiko_backup": True,
-            "version": "0.6.2",
+            "version": "0.7.0",
             "created_at": now_iso,
             "encrypted": False,
             "data": payload
