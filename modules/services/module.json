@@ -1,0 +1,10 @@
+{
+    "name": "Services",
+    "icon": "<svg viewBox='0 0 24 24' width='28' height='28' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'><rect x='2' y='3' width='20' height='6' rx='1.5'/><rect x='2' y='15' width='20' height='6' rx='1.5'/><circle cx='6' cy='6' r='1' fill='currentColor'/><circle cx='6' cy='18' r='1' fill='currentColor'/><line x1='10' y1='6' x2='18' y2='6'/><line x1='10' y1='18' x2='18' y2='18'/><path d='M12 9v6'/></svg>",
+    "enabled": true,
+    "index": 15,
+    "description": "Manage active system services, listening network ports with one-click web launcher, and Docker/Podman containers.",
+    "author": "Alessio Saponaro",
+    "site": ""
+}
+

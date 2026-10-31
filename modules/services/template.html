@@ -1,0 +1,446 @@
+<div class="amiko-module" data-module-type="services">
+    <style>
+        .mod-srv-tabs {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--text-dim);
+            background-color: var(--bg-secondary);
+            padding: 0 8px 0 0;
+            flex-shrink: 0;
+        }
+        .mod-srv-tab-group {
+            display: flex;
+        }
+        .mod-srv-tab-btn {
+            padding: 8px 16px;
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-dim);
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+        .mod-srv-tab-btn:hover {
+            color: var(--text-primary);
+            background-color: rgba(255, 255, 255, 0.04);
+        }
+        .mod-srv-tab-btn.active {
+            color: var(--text-primary);
+            border-bottom-color: var(--text-primary);
+            background-color: rgba(255, 255, 255, 0.06);
+        }
+        .mod-srv-tab-count {
+            font-size: 0.68rem;
+            padding: 1px 6px;
+            border-radius: 10px;
+            border: 1px solid var(--text-dim);
+            opacity: 0.85;
+        }
+        .mod-srv-header-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .mod-srv-auto-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            cursor: pointer;
+            user-select: none;
+        }
+        .mod-srv-panel {
+            display: none;
+            flex: 1;
+            min-height: 0;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .mod-srv-panel.active {
+            display: flex;
+        }
+        .mod-srv-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 8px 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            background-color: rgba(0, 0, 0, 0.18);
+            flex-wrap: wrap;
+            flex-shrink: 0;
+        }
+        .mod-srv-filters {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+        .mod-srv-pill {
+            padding: 4px 9px;
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            background: transparent;
+            color: var(--text-dim);
+            border: 1px solid var(--text-dim);
+            border-radius: 3px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: all 0.12s ease;
+        }
+        .mod-srv-pill:hover {
+            color: var(--text-primary);
+            border-color: var(--text-primary);
+        }
+        .mod-srv-pill.active {
+            color: var(--bg-primary);
+            background-color: var(--text-primary);
+            border-color: var(--text-primary);
+            font-weight: bold;
+        }
+        .mod-srv-search {
+            background: var(--bg-primary);
+            border: 1px solid var(--text-dim);
+            color: var(--text-primary);
+            padding: 4px 9px;
+            font-family: var(--font-mono);
+            font-size: 0.76rem;
+            border-radius: 3px;
+            min-width: 180px;
+            outline: none;
+        }
+        .mod-srv-search:focus {
+            border-color: var(--text-primary);
+            box-shadow: 0 0 6px var(--glow-primary);
+        }
+        .mod-srv-table-wrap {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: auto;
+        }
+        .mod-srv-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+        }
+        .mod-srv-table th {
+            position: sticky;
+            top: 0;
+            background-color: var(--bg-secondary);
+            color: var(--text-dim);
+            text-align: left;
+            padding: 7px 10px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid var(--text-dim);
+            z-index: 2;
+        }
+        .mod-srv-table td {
+            padding: 7px 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            vertical-align: middle;
+        }
+        .mod-srv-table tr:hover td {
+            background-color: rgba(255, 255, 255, 0.03);
+        }
+        .mod-srv-name {
+            font-weight: bold;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .mod-srv-desc {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-top: 2px;
+            max-width: 280px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .mod-srv-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 2px 7px;
+            border-radius: 3px;
+            font-size: 0.68rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border: 1px solid currentColor;
+            white-space: nowrap;
+        }
+        .mod-srv-badge.st-running {
+            color: var(--text-primary);
+            background: rgba(0, 255, 100, 0.08);
+        }
+        .mod-srv-badge.st-failed {
+            color: var(--accent-red, #ff5555);
+            background: rgba(255, 85, 85, 0.12);
+        }
+        .mod-srv-badge.st-stopped {
+            color: var(--text-dim);
+            background: rgba(255, 255, 255, 0.03);
+        }
+        .mod-srv-badge.st-paused {
+            color: var(--accent-amber, #ffaa00);
+            background: rgba(255, 170, 0, 0.1);
+        }
+        .mod-srv-ports-cell {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 5px;
+        }
+        /* 1-Click Web Service Button */
+        .mod-srv-web-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            font-weight: bold;
+            text-decoration: none;
+            color: #000;
+            background-color: var(--accent-amber, #ffaa00);
+            border: 1px solid var(--accent-amber, #ffaa00);
+            cursor: pointer;
+            transition: transform 0.1s ease, box-shadow 0.15s ease;
+            white-space: nowrap;
+        }
+        .mod-srv-web-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 0 8px var(--accent-amber, #ffaa00);
+        }
+        .mod-srv-port-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.7rem;
+            color: var(--text-secondary, #aaa);
+            border: 1px solid var(--text-dim);
+            background: rgba(255, 255, 255, 0.03);
+            text-decoration: none;
+            white-space: nowrap;
+        }
+        a.mod-srv-port-chip:hover {
+            color: var(--text-primary);
+            border-color: var(--text-primary);
+        }
+        /* Action Buttons */
+        .mod-srv-actions {
+            display: flex;
+            align-items: center;
+             justify-content: flex-end;
+            gap: 4px;
+            white-space: nowrap;
+        }
+        .mod-srv-act-btn {
+            padding: 3px 8px;
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            background: transparent;
+            color: var(--text-primary);
+            border: 1px solid var(--text-dim);
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.12s ease;
+            text-transform: uppercase;
+        }
+        .mod-srv-act-btn:hover:not(:disabled) {
+            border-color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .mod-srv-act-btn.act-stop {
+            color: var(--accent-red, #ff5555);
+            border-color: rgba(255, 85, 85, 0.5);
+        }
+        .mod-srv-act-btn.act-stop:hover:not(:disabled) {
+            background: rgba(255, 85, 85, 0.15);
+            border-color: var(--accent-red, #ff5555);
+        }
+        .mod-srv-act-btn.act-start {
+            color: var(--text-primary);
+            border-color: var(--text-primary);
+        }
+        .mod-srv-act-btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+        /* Log / Status Drawer */
+        .mod-srv-drawer {
+            display: none;
+            flex-direction: column;
+            height: 44%;
+            min-height: 150px;
+            border-top: 2px solid var(--text-primary);
+            background-color: #050505;
+            flex-shrink: 0;
+        }
+        .mod-srv-drawer.open {
+            display: flex;
+        }
+        .mod-srv-drawer-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 5px 10px;
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--text-dim);
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        .mod-srv-drawer-body {
+            flex: 1;
+            margin: 0;
+            padding: 8px 10px;
+            overflow: auto;
+            font-family: var(--font-mono);
+            font-size: 0.73rem;
+            line-height: 1.35;
+            color: var(--text-primary);
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+    </style>
+
+    <div class="module-header">
+        <span class="module-title">
+            <svg class="module-icon-svg"><use href="#icon-services"></use></svg>
+            Services &amp; Containers
+        </span>
+        <div class="mod-srv-header-controls">
+            <label class="mod-srv-auto-label" title="Auto-refresh every 15 seconds">
+                <input type="checkbox" class="mod-srv-autorefresh">
+                <span>Auto (15s)</span>
+            </label>
+            <button type="button" class="mod-srv-act-btn mod-srv-btn-refresh" title="Refresh now" style="display:inline-flex; align-items:center; gap:4px;">
+                <svg class="md-icon"><use href="#md-refresh"></use></svg> Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="mod-srv-tabs">
+        <div class="mod-srv-tab-group">
+            <button type="button" class="mod-srv-tab-btn active" data-srv-tab="services">
+                <svg class="md-icon"><use href="#md-dns"></use></svg>
+                System Services
+                <span class="mod-srv-tab-count mod-srv-count-services">0</span>
+            </button>
+            <button type="button" class="mod-srv-tab-btn" data-srv-tab="containers">
+                <svg class="md-icon"><use href="#md-storage"></use></svg>
+                Containers
+                <span class="mod-srv-tab-count mod-srv-count-containers">0</span>
+            </button>
+        </div>
+        <div class="mod-srv-host-indicator" style="font-size:0.72rem; color:var(--text-dim); padding-right:4px;">
+            Not connected
+        </div>
+    </div>
+
+    <div class="module-body" style="padding: 0; display: flex; flex-direction: column; overflow: hidden;">
+
+        <!-- TAB 1: SYSTEM SERVICES & OPEN PORTS -->
+        <div class="mod-srv-panel active" data-srv-panel="services">
+            <div class="mod-srv-toolbar">
+                <div class="mod-srv-filters">
+                    <button type="button" class="mod-srv-pill active" data-srv-filter="active">Active &amp; Open</button>
+                    <button type="button" class="mod-srv-pill" data-srv-filter="web">🌐 Web Services</button>
+                    <button type="button" class="mod-srv-pill" data-srv-filter="listening">🔌 Listening Ports</button>
+                    <button type="button" class="mod-srv-pill" data-srv-filter="failed">⚠️ Failed</button>
+                    <button type="button" class="mod-srv-pill" data-srv-filter="all">All Units</button>
+                </div>
+                <input type="text" class="mod-srv-search mod-srv-search-services" placeholder="Filter service, :port, process...">
+            </div>
+
+            <div class="mod-srv-table-wrap">
+                <table class="mod-srv-table">
+                    <thead>
+                        <tr>
+                            <th>Service / Process</th>
+                            <th style="width: 105px;">State</th>
+                            <th>Open Ports &amp; Web UI</th>
+                            <th style="text-align: right; width: 170px;">Controls</th>
+                        </tr>
+                    </thead>
+                    <tbody class="mod-srv-tbody-services">
+                        <tr>
+                            <td colspan="4" style="text-align: center; padding: 28px; color: var(--text-dim);">
+                                // Connect to a server to inspect open services and web ports...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB 2: CONTAINERS (DOCKER / PODMAN) -->
+        <div class="mod-srv-panel" data-srv-panel="containers">
+            <div class="mod-srv-toolbar">
+                <div class="mod-srv-filters">
+                    <span class="mod-srv-runtime-badge" style="font-size:0.7rem; padding:3px 8px; border-radius:3px; border:1px solid var(--text-dim); color:var(--text-primary); margin-right:4px;">RUNTIME: —</span>
+                    <button type="button" class="mod-srv-pill active" data-cnt-filter="all">All</button>
+                    <button type="button" class="mod-srv-pill" data-cnt-filter="running">Running</button>
+                    <button type="button" class="mod-srv-pill" data-cnt-filter="web">🌐 Web UI</button>
+                    <button type="button" class="mod-srv-pill" data-cnt-filter="stopped">Stopped</button>
+                </div>
+                <input type="text" class="mod-srv-search mod-srv-search-containers" placeholder="Filter container, image, :port...">
+            </div>
+
+            <div class="mod-srv-table-wrap">
+                <table class="mod-srv-table">
+                    <thead>
+                        <tr>
+                            <th>Container &amp; Image</th>
+                            <th style="width: 140px;">Status</th>
+                            <th>Published Ports &amp; Web UI</th>
+                            <th style="text-align: right; width: 170px;">Controls</th>
+                        </tr>
+                    </thead>
+                    <tbody class="mod-srv-tbody-containers">
+                        <tr>
+                            <td colspan="4" style="text-align: center; padding: 28px; color: var(--text-dim);">
+                                // Connect to a server to manage Docker / Podman containers...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- INTEGRATED LOGS & STATUS DRAWER -->
+        <div class="mod-srv-drawer">
+            <div class="mod-srv-drawer-header">
+                <span class="mod-srv-drawer-title">Logs &amp; Status</span>
+                <div style="display:flex; gap:6px;">
+                    <button type="button" class="mod-srv-act-btn mod-srv-drawer-refresh">Refresh</button>
+                    <button type="button" class="mod-srv-act-btn mod-srv-drawer-close">✕ Close</button>
+                </div>
+            </div>
+            <pre class="mod-srv-drawer-body">// Loading...</pre>
+        </div>
+
+    </div>
+</div>
+

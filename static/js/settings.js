@@ -1384,7 +1384,7 @@ class SettingsPanel {
     applyTheme(themeId) {
         const link = document.getElementById('theme-stylesheet');
         if (link) {
-            link.href = `/static/css/themes/${themeId}.css?v=0.7.0`;
+            link.href = `/static/css/themes/${themeId}.css?v=0.7.1`;
             // Refresh JS theme bridge after CSS loads
             link.onload = () => {
                 if (typeof refreshThemeVars === 'function') {
@@ -1482,7 +1482,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.active_theme) {
                 const link = document.getElementById('theme-stylesheet');
                 if (link) {
-                    link.href = `/static/css/themes/${data.active_theme}.css?v=0.7.0`;
+                    link.href = `/static/css/themes/${data.active_theme}.css?v=0.7.1`;
                     link.onload = () => {
                         if (typeof refreshThemeVars === 'function') {
                             refreshThemeVars();

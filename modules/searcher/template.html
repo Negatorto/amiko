@@ -1,0 +1,136 @@
+<div class="amiko-module" data-module-type="searcher">
+    <style>
+        .mod-searcher-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--text-dim);
+            background-color: var(--bg-secondary);
+            flex-shrink: 0;
+        }
+        .mod-searcher-tab-btn {
+            flex: 1;
+            padding: 8px 14px;
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-dim);
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+        .mod-searcher-tab-btn:hover {
+            color: var(--text-primary);
+            background-color: rgba(255, 255, 255, 0.04);
+        }
+        .mod-searcher-tab-btn.active {
+            color: var(--text-primary);
+            border-bottom-color: var(--text-primary);
+            background-color: rgba(255, 255, 255, 0.06);
+        }
+        .mod-searcher-panel {
+            display: none;
+            flex: 1;
+            min-height: 0;
+            flex-direction: column;
+        }
+        .mod-searcher-panel.active {
+            display: flex;
+        }
+    </style>
+
+    <div class="module-header">
+        <span class="module-title"><svg class="module-icon-svg"><use href="#icon-searcher"></use></svg> Searcher</span>
+    </div>
+
+    <!-- Section Switcher Tabs -->
+    <div class="mod-searcher-tabs">
+        <button type="button" class="mod-searcher-tab-btn active" data-searcher-tab="files">
+            <svg class="md-icon"><use href="#md-folder"></use></svg>
+            File Search
+        </button>
+        <button type="button" class="mod-searcher-tab-btn" data-searcher-tab="keyword">
+            <svg class="md-icon"><use href="#md-file"></use></svg>
+            Keyword Search
+        </button>
+    </div>
+
+    <div class="module-body">
+
+        <!-- SECTION 1: Classic File Search -->
+        <div class="mod-searcher-panel active" data-searcher-panel="files">
+            <form class="form-grid amiko-mod-file-form">
+                <div class="form-group">
+                    <label>Remote Path</label>
+                    <input type="text" class="mod-file-path" placeholder="/var/www" required>
+                </div>
+                <div class="form-group">
+                    <label>File Name / Pattern</label>
+                    <input type="text" class="mod-file-query" placeholder="e.g. *.conf or nginx" required>
+                </div>
+                <div class="form-group">
+                    <label>Target</label>
+                    <select class="mod-file-target">
+                        <option value="all">Files &amp; Folders</option>
+                        <option value="files">Files Only</option>
+                        <option value="dirs">Folders Only</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Case Sensitive</label>
+                    <select class="mod-file-case">
+                        <option value="false">No</option>
+                        <option value="true">Yes</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <button type="submit" class="mod-btn-submit mod-btn-file-submit">FIND FILES</button>
+                </div>
+            </form>
+            <div class="terminal-container" style="flex: 1;">
+                <div class="terminal-body large mod-file-terminal" style="height: 100%;">
+                    <div class="log-entry log-dim">// File search ready (supports wildcards like *.log, backup*, config)...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 2: Keyword Search in Files -->
+        <div class="mod-searcher-panel" data-searcher-panel="keyword">
+            <form class="form-grid amiko-mod-form">
+                <div class="form-group">
+                    <label>Remote Path</label>
+                    <input type="text" class="mod-path" placeholder="/var/www/html" required>
+                </div>
+                <div class="form-group">
+                    <label>Keyword</label>
+                    <input type="text" class="mod-keyword" placeholder="search_term" required>
+                </div>
+                <div class="form-group">
+                    <label>Case Sensitive</label>
+                    <select class="mod-case-sensitive">
+                        <option value="false">No</option>
+                        <option value="true">Yes</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <button type="submit" class="mod-btn-submit mod-btn-keyword-submit">START SEARCH</button>
+                </div>
+            </form>
+            <div class="terminal-container" style="flex: 1;">
+                <div class="terminal-body large mod-terminal" style="height: 100%;">
+                    <div class="log-entry log-dim">// Keyword search ready...</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+

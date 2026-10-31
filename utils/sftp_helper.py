@@ -481,6 +481,109 @@ def search_keyword_in_files(sftp, remote_path, keyword, case_sensitive=False, ex
     }
 
 
+def search_files_by_name(sftp, remote_path, query, case_sensitive=False, target_type='all'):
+    """
+    Search for files and/or directories matching a filename pattern or substring recursively via SFTP.
+    Supports wildcard patterns (e.g. '*.conf', 'backup*') or substring matching.
+
+    Args:
+        sftp: SFTP client instance
+        remote_path: String path to search
+        query: Filename substring or glob pattern
+        case_sensitive: Boolean for case sensitivity
+        target_type: 'all' | 'files' | 'dirs'
+
+    Yields:
+        dict: Event dictionaries with type and message
+    """
+    import fnmatch
+
+    items_checked = 0
+    matches_found = 0
+    has_wildcard = any(ch in query for ch in ('*', '?', '['))
+    query_cmp = query if case_sensitive else query.lower()
+
+    def _matches(name: str) -> bool:
+        name_cmp = name if case_sensitive else name.lower()
+        if has_wildcard:
+            return fnmatch.fnmatchcase(name_cmp, query_cmp)
+        return query_cmp in name_cmp
+
+    def _format_size(size_bytes: int) -> str:
+        if size_bytes < 1024:
+            return f"{size_bytes} B"
+        elif size_bytes < 1024 * 1024:
+            return f"{size_bytes / 1024:.1f} KB"
+        elif size_bytes < 1024 * 1024 * 1024:
+            return f"{size_bytes / (1024 * 1024):.2f} MB"
+        return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+    def walk_and_match(path):
+        nonlocal items_checked, matches_found
+
+        try:
+            for entry in sftp.listdir_attr(path):
+                name = entry.filename
+                if name in ('.', '..'):
+                    continue
+
+                remote_item_path = os.path.join(path, name)
+                mode = entry.st_mode
+                is_dir = stat.S_ISDIR(mode)
+                is_reg = stat.S_ISREG(mode)
+
+                if is_dir or is_reg:
+                    items_checked += 1
+
+                # Check if this item should be evaluated based on target_type
+                check_this = (
+                    target_type == 'all'
+                    or (target_type == 'files' and is_reg)
+                    or (target_type == 'dirs' and is_dir)
+                )
+
+                if check_this and _matches(name):
+                    matches_found += 1
+                    if is_dir:
+                        yield {
+                            'type': 'match',
+                            'message': f'TROVATO [DIR]: {remote_item_path}/',
+                            'file': remote_item_path,
+                            'is_dir': True
+                        }
+                    else:
+                        size_str = _format_size(getattr(entry, 'st_size', 0) or 0)
+                        yield {
+                            'type': 'match',
+                            'message': f'TROVATO [FILE]: {remote_item_path} ({size_str})',
+                            'file': remote_item_path,
+                            'is_dir': False,
+                            'size_bytes': getattr(entry, 'st_size', 0) or 0
+                        }
+                elif check_this:
+                    yield {
+                        'type': 'log',
+                        'message': f'Controllato {remote_item_path}'
+                    }
+
+                if is_dir:
+                    yield from walk_and_match(remote_item_path)
+
+        except Exception as e:
+            yield {
+                'type': 'error',
+                'message': f'Errore accesso percorso {path}: {str(e)}'
+            }
+
+    yield from walk_and_match(remote_path)
+
+    yield {
+        'type': 'summary',
+        'files_checked': items_checked,
+        'matches_found': matches_found
+    }
+
+
 def search_large_files(sftp, remote_path, threshold_mb):
     """
     Search for files larger than threshold size recursively via SFTP.

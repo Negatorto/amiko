@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="static/img/AMIKO.png?v=0.7.0" alt="AMIKO Logo" width="230">
+  <img src="static/img/AMIKO.png?v=0.7.1" alt="AMIKO Logo" width="230">
 </p>
 
-# AMIKO v0.7.0
+# AMIKO v0.7.1
 
 
 **Advanced Multi-function Interface Kit for Operations**
@@ -13,9 +13,24 @@ Built with Flask and WebSocket, it connects to remote servers via SSH/SFTP and p
 
 ---
 
+## What's New in v0.7.1
+
+- **New Module — Services & Containers (`services`)**:
+  - **Active Services & Listening Ports**: real-time discovery of open TCP and UDP sockets correlated with systemd service units and standalone processes.
+  - **1-Click Web Service Launcher**: automatic detection of web applications and control panels (HTTP/HTTPS) on standard and custom ports with direct `🌐 OPEN :PORT` browser buttons.
+  - **Service Lifecycle Controls**: start, stop, restart, and inspect status and recent journal logs with an integrated inspector drawer. Includes anti-lockout safeguards protecting SSH and network services from accidental termination.
+  - **Docker & Podman Containers**: auto-detects installed container runtimes, displays container health, port mappings with web launchers, and allows start, stop, restart, and log inspection.
+- **Upgraded Module — Searcher (`searcher`)**:
+  - Replaces and expands the former `keyword_search` module into a dual-mode search tool:
+    - **File Search Tab**: recursive search for files and folders by name or wildcard pattern (e.g. `*.conf`, `backup*`), with target filters (files, directories, all) and case-sensitivity toggle.
+    - **Keyword Search Tab**: full text content search across remote files with line numbers and match summaries.
+  - Includes transparent backwards compatibility for existing saved layouts.
+
+---
+
 ## What's New in v0.7.0 (Defense)
 
-This release completes the **v0.7 "Defense"** milestone of the NIS2 (D.Lgs. 138/2024) compliance plan. It focuses on perimeter defence and incident detection (Art. 21(2)(b)(e)(j)):
+This release completed perimeter defence and incident detection capabilities:
 
 - **L7 host firewall**: ordered INPUT/OUTPUT rules (source/destination CIDR, interface, protocol, port/service, state) with ▲/▼ reordering, a default policy per chain and egress control for outbound SSH/SFTP connections.
 - **Ports & Services dictionary**: named services (`AMIKO-WEB`, `SSH`, `HTTP`, `HTTPS`, `PING`, or your own) that firewall rules can reference.
@@ -24,7 +39,7 @@ This release completes the **v0.7 "Defense"** milestone of the NIS2 (D.Lgs. 138/
 - **Anti-lockout safeguard**: loopback is always accepted, and changes that would cut off your own connection are refused.
 - **Delegated permission**: admins can grant `can_manage_firewall` to individual operators.
 - **Break-glass CLI**: `utils/reset_firewall.py` (`--status`, `--unban`, `--disable`, `--flush-bans`, `--disable-fail2ban`), picked up by the running server and fully audited.
-- **Security email notifications**: STARTTLS/SSL SMTP alerts to a security contact, with immediate critical alerts, anti-flood digests, non-blocking retries, a NIS2 Art. 23 deadline reminder and an hourly audit-chain integrity check.
+- **Security email notifications**: STARTTLS/SSL SMTP alerts to a security contact, with immediate critical alerts, anti-flood digests, non-blocking retries, deadline reminders and an hourly audit-chain integrity check.
 - **Hardening**:
   - `X-Forwarded-For` is now trusted only from configured reverse proxies (`AMIKO_TRUSTED_PROXIES`).
   - The audit hash chain stays consistent when written by multiple processes.
@@ -51,7 +66,8 @@ This release completes the **v0.7 "Defense"** milestone of the NIS2 (D.Lgs. 138/
 |--------|-------------|
 | **Explorer** | Browse, read, and edit remote files via SFTP. Supports text editing with syntax-aware features and image preview. |
 | **SSH Terminal** | Full interactive terminal session using xterm.js. |
-| **Keyword Search** | Search for text patterns across remote directories. |
+| **Services** | Inspect active system services, listening ports with 1-click Web UI launcher, and manage Docker/Podman containers (start, stop, restart, logs). |
+| **Searcher** | Dual-section search tool: classic file/folder search by name or wildcard pattern, plus content keyword search across remote directories. |
 | **Large Files** | Identify and list the largest files on a remote filesystem. |
 | **Notes App** | Per-server scratchpad for saving quick notes and annotations. |
 
@@ -183,7 +199,8 @@ amiko/
 ├── modules/                # Plugin modules (auto-discovered)
 │   ├── explorer/
 │   ├── ssh/
-│   ├── keyword_search/
+│   ├── services/
+│   ├── searcher/
 │   ├── large_files/
 │   └── notes/
 ├── data/                   # Persistent data (encrypted settings vault, notes)

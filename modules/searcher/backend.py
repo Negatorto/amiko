@@ -1,9 +1,16 @@
 from flask import Blueprint, request, Response, stream_with_context
 import json
 from core.config import ssh_sessions
-from utils.sftp_helper import connect_ftp, connect_sftp, search_keyword_in_files, search_keyword_in_files_ftp
+from utils.sftp_helper import (
+    connect_ftp,
+    connect_sftp,
+    search_keyword_in_files,
+    search_keyword_in_files_ftp,
+    search_files_by_name,
+)
 
-blueprint = Blueprint('keyword_search', __name__)
+blueprint = Blueprint('searcher', __name__)
+
 
 @blueprint.route('/search')
 def search():
@@ -72,3 +79,59 @@ def search():
                     client.close()
 
     return Response(stream_with_context(generate()), content_type='text/event-stream')
+
+
+@blueprint.route('/search-files')
+def search_files():
+    """
+    Classic file & directory search by name or glob pattern via SFTP
+    SSE endpoint
+    """
+    session_id = request.args.get('session_id')
+    path = request.args.get('path')
+    query = request.args.get('query')
+    case_sensitive = request.args.get('case_sensitive') == 'true'
+    target_type = request.args.get('target_type', 'all')
+    if target_type not in ('all', 'files', 'dirs'):
+        target_type = 'all'
+
+    if not all([session_id, path, query]):
+        return "Missing arguments", 400
+
+    if session_id not in ssh_sessions:
+        return "Invalid session", 400
+
+    session_data = ssh_sessions[session_id]
+    hostname = session_data['hostname']
+    port = session_data['port']
+    username = session_data['username']
+    password = session_data['password']
+    private_key = session_data.get('private_key', '')
+
+    def generate():
+        client = None
+        sftp = None
+
+        try:
+            yield f"data: {json.dumps({'type': 'info', 'message': f'SFTP Connection to {hostname}:{port}...' })}\n\n"
+            client, sftp = connect_sftp(hostname, port, username, password, private_key=private_key)
+            yield f"data: {json.dumps({'type': 'success', 'message': 'SFTP Connection established!' })}\n\n"
+
+            for event in search_files_by_name(sftp, path, query, case_sensitive=case_sensitive, target_type=target_type):
+                if event.get('type') == 'summary':
+                    yield f"data: {json.dumps({'type': 'done', 'message': 'File search completed.', 'files_checked': event.get('files_checked', 0), 'matches_found': event.get('matches_found', 0)})}\n\n"
+                else:
+                    yield f"data: {json.dumps(event)}\n\n"
+
+        except ConnectionRefusedError:
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Error: Connection Refused.' })}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': f'Error: {str(e)}'})}\n\n"
+        finally:
+            if sftp:
+                sftp.close()
+            if client:
+                client.close()
+
+    return Response(stream_with_context(generate()), content_type='text/event-stream')
+

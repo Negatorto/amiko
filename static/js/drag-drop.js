@@ -426,8 +426,9 @@ class AmikoDesktopLauncher {
         const layout = this.layouts[name];
         layout.forEach(config => {
             if (config.type) {
-                const dockBtn = document.getElementById(`dock-btn-${config.type}`);
-                this.openModule(config.type, dockBtn);
+                const modType = config.type === 'keyword_search' ? 'searcher' : config.type;
+                const dockBtn = document.getElementById(`dock-btn-${modType}`);
+                this.openModule(modType, dockBtn);
             }
         });
 

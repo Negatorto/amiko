@@ -842,7 +842,7 @@ class SettingsManager:
             token = cipher.encrypt(raw_bytes).decode("ascii")
             return {
                 "amiko_backup": True,
-                "version": "0.7.0",
+                "version": "0.7.1",
                 "created_at": now_iso,
                 "encrypted": True,
                 "kdf": "PBKDF2-HMAC-SHA256-600000",
@@ -851,7 +851,7 @@ class SettingsManager:
             }
         return {
             "amiko_backup": True,
-            "version": "0.7.0",
+            "version": "0.7.1",
             "created_at": now_iso,
             "encrypted": False,
             "data": payload

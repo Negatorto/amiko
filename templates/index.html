@@ -7,15 +7,15 @@
     <title>AMIKO - Advanced Multi-function Interface Kit for Operations</title>
 
     <!-- Custom CSS Themes -->
-    <link rel="stylesheet" id="theme-stylesheet" href="{{ url_for('static', filename='css/themes/amiko-theme.css') }}?v=0.7.0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=0.7.0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/connection.css') }}?v=0.7.0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules.css') }}?v=0.7.0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/terminal.css') }}?v=0.7.0">
+    <link rel="stylesheet" id="theme-stylesheet" href="{{ url_for('static', filename='css/themes/amiko-theme.css') }}?v=0.7.1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=0.7.1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/connection.css') }}?v=0.7.1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules.css') }}?v=0.7.1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/terminal.css') }}?v=0.7.1">
     <!-- Xterm.js CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='lib/xterm/xterm.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/resource-bars.css') }}?v=0.7.0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}?v=0.7.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/resource-bars.css') }}?v=0.7.1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}?v=0.7.1">
 
     <!-- GridStack.js CSS (kept for compat) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='lib/gridstack/gridstack.min.css') }}">
@@ -343,7 +343,7 @@
     <!-- BOTTOM BAR                                    -->
     <!-- ══════════════════════════════════════════════ -->
     <div class="bottom-bar" id="bottom-bar">
-        <span class="bottombar-brand">AMIKO v0.7.0</span>
+        <span class="bottombar-brand">AMIKO v0.7.1</span>
         <span class="bottombar-center"></span>
         <div class="bottombar-status">
             <span class="bottombar-dot" id="bottombarDot"></span>
@@ -755,17 +755,17 @@
     </script>
 
     <!-- App Scripts -->
-    <script src="{{ url_for('static', filename='js/theme.js') }}?v=0.7.0"></script>
-    <script src="{{ url_for('static', filename='js/connection.js') }}?v=0.7.0"></script>
-    <script src="{{ url_for('static', filename='js/drag-drop.js') }}?v=0.7.0"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=0.7.0"></script>
-    <script src="{{ url_for('static', filename='js/settings.js') }}?v=0.7.0"></script>
-    <script src="{{ url_for('static', filename='js/firewall.js') }}?v=0.7.0"></script>
-    <script src="{{ url_for('static', filename='js/notifications.js') }}?v=0.7.0"></script>
+    <script src="{{ url_for('static', filename='js/theme.js') }}?v=0.7.1"></script>
+    <script src="{{ url_for('static', filename='js/connection.js') }}?v=0.7.1"></script>
+    <script src="{{ url_for('static', filename='js/drag-drop.js') }}?v=0.7.1"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=0.7.1"></script>
+    <script src="{{ url_for('static', filename='js/settings.js') }}?v=0.7.1"></script>
+    <script src="{{ url_for('static', filename='js/firewall.js') }}?v=0.7.1"></script>
+    <script src="{{ url_for('static', filename='js/notifications.js') }}?v=0.7.1"></script>
 
     <!-- Dynamic Plugin Scripts -->
     {% for mod in modules %}
-    <script src="/static_modules/{{ mod.id }}/client.js?v=0.7.0"></script>
+    <script src="/static_modules/{{ mod.id }}/client.js?v=0.7.1"></script>
     {% endfor %}
 </body>
 
