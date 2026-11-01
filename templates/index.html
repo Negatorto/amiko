@@ -560,6 +560,13 @@
                                 <input type="checkbox" class="theme-toggle-checkbox" id="crtToggle" checked>
                             </label>
                         </div>
+                        <!-- Live Background Effect Toggle -->
+                        <div class="crt-toggle-row" style="margin-top: 10px;">
+                            <label class="crt-toggle-label">
+                                <span class="crt-toggle-title">🌌 LIVE BACKGROUND EFFECT</span>
+                                <input type="checkbox" class="theme-toggle-checkbox" id="bgEffectToggle" checked>
+                            </label>
+                        </div>
                         <!-- Vitals Display Mode -->
                         <div class="crt-toggle-row" style="margin-top: 10px;">
                             <label class="crt-toggle-label" style="gap: 12px;">
@@ -631,6 +638,21 @@
                             <label class="iface-toggle-row">
                                 <input type="checkbox" class="theme-toggle-checkbox" id="animationsEnabled" checked>
                                 <span class="iface-toggle-label">Animations enabled</span>
+                            </label>
+                        </div>
+
+                        <!-- Live Desktop Background -->
+                        <div class="iface-pref-group">
+                            <div class="iface-pref-header">
+                                <span class="iface-pref-icon">🌌</span>
+                                <div>
+                                    <div class="iface-pref-title">Live Desktop Background</div>
+                                    <div class="iface-pref-desc">Interactive per-theme canvas background effect (Matrix Rain, Synthwave Grid, Bat-Sonar, Arcade Maze, etc.).</div>
+                                </div>
+                            </div>
+                            <label class="iface-toggle-row">
+                                <input type="checkbox" class="theme-toggle-checkbox" id="bgEffectInterfaceToggle" checked>
+                                <span class="iface-toggle-label">Live background effect enabled</span>
                             </label>
                         </div>
 
@@ -756,6 +778,7 @@
 
     <!-- App Scripts -->
     <script src="{{ url_for('static', filename='js/theme.js') }}?v=0.7.1"></script>
+    <script src="{{ url_for('static', filename='js/background.js') }}?v=0.7.1"></script>
     <script src="{{ url_for('static', filename='js/connection.js') }}?v=0.7.1"></script>
     <script src="{{ url_for('static', filename='js/drag-drop.js') }}?v=0.7.1"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}?v=0.7.1"></script>

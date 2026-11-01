@@ -6,19 +6,20 @@
 
 :root {
     /* Backgrounds — deep black like old CRT screens */
-    --bg-primary: #0a0a08;
-    --bg-secondary: #141410;
-    --bg-tertiary: #1c1c16;
+    --bg-primary: #0a0a0c;
+    --bg-secondary: #121216;
+    --bg-tertiary: #1a1a20;
 
     /* Text & Outlines — warm amber phosphor glow */
     --text-primary: #ffb000;
     --text-secondary: #cc8800;
     --text-dim: rgba(255, 176, 0, 0.45);
 
-    /* Semantic Accents */
+    /* Semantic Accents — amber & signature ottanio (teal) */
     --accent-warning: #ff6600cc;
     --accent-danger: #ff3300cc;
-    --accent-info: #ffcc00bb;
+    --accent-info: #14b8a6;
+    --accent-highlight: #14b8a6;
 
     /* Effects & Border — amber glow */
     --border: rgba(255, 176, 0, 0.25);

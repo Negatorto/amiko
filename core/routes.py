@@ -6,6 +6,7 @@ from flask import render_template, request, Response, stream_with_context, jsoni
 from core import app, active_modules
 from core.config import settings, ssh_sessions, MODULES_DIR
 from core.auth import get_current_user, filter_modules_for_user, role_required, capability_required
+from core.plugins import get_module_manifest, verify_static_module_file, inspect_all_modules
 from core.client_ip import get_client_ip
 from core.firewall import firewall, report_failure, operator_context
 from core.notifier import get_notifier
@@ -245,12 +246,32 @@ def api_auth_me():
 
 @app.route('/static_modules/<module_name>/<path:filename>')
 def serve_module_static(module_name, filename):
-    """Serve static files (like client.js) from module folders"""
+    """Serve verified static files (client.js) from module folders after checking manifest & SHA-256 integrity."""
     user = get_current_user()
     if user and module_name in user.get('capabilities', {}).get('blocked_modules', []):
         return jsonify({'error': 'Module access denied for your role'}), 403
+
+    manifest = get_module_manifest(module_name)
+    if not manifest:
+        return jsonify({'error': 'Module not loaded or failed integrity verification'}), 403
+
+    allowed_roles = (manifest.get('permissions') or {}).get('allowed_roles', [])
+    if user and allowed_roles and user.get('role') not in allowed_roles:
+        return jsonify({'error': 'Module access denied by permission manifest'}), 403
+
+    ok, err_msg = verify_static_module_file(module_name, filename)
+    if not ok:
+        return jsonify({'error': err_msg}), 403
+
     module_dir = os.path.join(MODULES_DIR, module_name)
     return send_from_directory(module_dir, filename)
+
+
+@app.route('/api/modules/integrity', methods=['GET'])
+@role_required('admin')
+def api_modules_integrity():
+    """Return permission manifests and SHA-256 integrity status for all modules."""
+    return jsonify({'status': 'ok', 'modules': inspect_all_modules()})
 
 @app.route('/')
 def index():
@@ -1029,7 +1050,8 @@ def api_get_themes():
     return jsonify({
         'active_theme': status['active_theme'],
         'themes': available,
-        'crt_enabled': settings.get_crt_enabled()
+        'crt_enabled': settings.get_crt_enabled(),
+        'bg_effect_enabled': settings.get_bg_effect_enabled()
     })
 
 
@@ -1054,10 +1076,18 @@ def api_toggle_theme(theme_name):
 
 @app.route('/api/settings/crt', methods=['PUT'])
 def api_toggle_crt():
-    data = request.get_json()
+    data = request.get_json() or {}
     enabled = data.get('enabled', True)
     result = settings.set_crt_enabled(enabled)
     return jsonify({'crt_enabled': result})
+
+
+@app.route('/api/settings/bg-effect', methods=['PUT'])
+def api_toggle_bg_effect():
+    data = request.get_json() or {}
+    enabled = data.get('enabled', True)
+    result = settings.set_bg_effect_enabled(enabled)
+    return jsonify({'bg_effect_enabled': result})
 
 
 @app.route('/api/settings/ui', methods=['GET'])

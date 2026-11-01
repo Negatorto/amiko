@@ -5,5 +5,31 @@
     "index": 10,
     "description": "A point-and-click file browser to navigate remote filesystems, browse directories, and view text file contents.",
     "author": "Alessio Saponaro",
-    "site": ""
+    "site": "",
+    "permissions": {
+        "allowed_roles": [
+            "admin",
+            "operator",
+            "viewer"
+        ],
+        "capabilities": [
+            "sftp_read",
+            "sftp_write"
+        ],
+        "requires_connection": true,
+        "write_endpoints": [
+            "/explorer/save-file",
+            "/explorer/create-file",
+            "/explorer/create-dir",
+            "/explorer/delete-entry"
+        ]
+    },
+    "integrity": {
+        "algorithm": "sha256",
+        "files": {
+            "template.html": "29397288b1f9aceb8840b9a8669a5c40a9600a60b5e70b5522cd21a61e999dfe",
+            "client.js": "c70c0d4bbc7df952335ae88af1515cab52ba66aae690d8cbe74dbcb2a092b9f7",
+            "backend.py": "1453473e4170114d5d3f4ae62defe67fcfc105efd83ad2f99fd96276ce7a7e91"
+        }
+    }
 }

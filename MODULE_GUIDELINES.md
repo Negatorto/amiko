@@ -21,7 +21,7 @@ modules/
 
 ---
 
-## Step 1 — `module.json`
+## Step 1 — `module.json` (Metadata, Permission Manifest & Integrity)
 
 ```json
 {
@@ -30,9 +30,27 @@ modules/
     "enabled": true,
     "index": 50,
     "description": "A short description of what this module does.",
-    "author": "Your Name"
+    "author": "Your Name",
+    "permissions": {
+        "allowed_roles": ["admin", "operator", "viewer"],
+        "capabilities": ["sftp_read"],
+        "requires_connection": true,
+        "write_endpoints": [
+            "/my-module/write-action"
+        ]
+    },
+    "integrity": {
+        "algorithm": "sha256",
+        "files": {
+            "template.html": "...",
+            "client.js": "...",
+            "backend.py": "..."
+        }
+    }
 }
 ```
+
+### Top-Level Fields
 
 | Field | Required | Notes |
 |-------|----------|-------|
@@ -42,6 +60,17 @@ modules/
 | `index` | ✅ | Controls the vertical order in the sidebar. Lower = higher up |
 | `description` | — | Internal reference only |
 | `author` | — | Optional credit |
+| `permissions` | ✅ | Declarative permission manifest enforced automatically by `core/plugins.py` and `core/auth.py` |
+| `integrity` | ✅ | SHA-256 digests of `template.html`, `client.js`, and `backend.py` (auto-generated via `python3 utils/verify_modules.py --sign`) |
+
+### Permission Manifest (`permissions`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `allowed_roles` | `string[]` | Roles allowed to see and load this module (`"admin"`, `"operator"`, `"viewer"`). For example, `["admin", "operator"]` hides the module from `viewer` accounts. |
+| `capabilities` | `string[]` | Declared system capabilities used by the module: `"ssh_shell"`, `"ssh_exec"`, `"sftp_read"`, `"sftp_write"`, `"local_vault"`. |
+| `requires_connection` | `boolean` | Whether the module operates on an active remote server connection (default `true`). |
+| `write_endpoints` | `string[]` | Backend route paths (starting with `/`) that perform state-changing or write actions. `core/auth.py` automatically blocks `viewer` (read-only) users on these endpoints without any changes to core code. |
 
 ---
 
@@ -493,9 +522,30 @@ def write_action():
 
 ---
 
+## Step 7 — Plugin Integrity Verification (`utils/verify_modules.py`)
+
+Before loading a module's `template.html`, executing its `backend.py`, or serving its `client.js`, AMIKO verifies the SHA-256 digests of every file in the module against the `integrity` block in `module.json` (and ensures no untracked `.py` or `.js` files were injected into the module folder).
+
+Whenever you create a new module or edit `template.html`, `client.js`, or `backend.py`, update the module's integrity manifest with the CLI tool:
+
+```bash
+# Sign / update SHA-256 digests for all modules (or specify a single module ID)
+python3 utils/verify_modules.py --sign
+python3 utils/verify_modules.py --sign my_module
+
+# Check integrity status and permission manifests across all modules
+python3 utils/verify_modules.py --status
+```
+
+> 💡 **Development Tip**: By default, `AMIKO_PLUGIN_INTEGRITY=enforce` blocks any module whose files do not match `module.json["integrity"]` and logs a `PLUGIN_INTEGRITY_FAILED` event to the audit trail. During active frontend/backend iteration, you can run with `AMIKO_PLUGIN_INTEGRITY=warn` to log warnings without blocking module startup, then run `python3 utils/verify_modules.py --sign` when finished.
+
+---
+
 ## Checklist before submitting a module
 
 - [ ] Folder name is `snake_case` and matches the ID used in `module.json`, `template.html`, and `AmikoModules.register()`
+- [ ] `permissions` block in `module.json` declares `allowed_roles`, `capabilities`, and `write_endpoints`
+- [ ] Integrity hashes updated via `python3 utils/verify_modules.py --sign <your_module_id>` (and verified with `--status`)
 - [ ] No `id="..."` in `template.html` — classes only
 - [ ] All DOM queries scoped to `this.container.querySelector(...)`
 - [ ] `destroy()` method removes all event listeners and closes sockets/intervals

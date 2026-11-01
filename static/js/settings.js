@@ -12,6 +12,7 @@ class SettingsPanel {
         this.initTabs();
         this.initCloseBtn();
         this.initCrtToggle();
+        this.initBgEffectToggle();
         this.initVitalsMode();
         this.initInterface();
     }
@@ -972,7 +973,11 @@ class SettingsPanel {
         'amiko-barbie': { label: 'Barbie', quote: 'Come on Barbie, let\'s go party!' },
         'amiko-classic': { label: 'Classic', quote: '640K ought to be enough for anybody.' },
         'amiko-synthwave': { label: 'Synthwave', quote: 'The future is now.' },
-        'amiko-pacman': { label: 'Pac-Man', quote: 'WAKA WAKA WAKA' }
+        'amiko-pacman': { label: 'Pac-Man', quote: 'WAKA WAKA WAKA' },
+        'amiko-pipboy': { label: 'Pip-Boy', quote: 'War. War never changes.' },
+        'amiko-spaceinvaders': { label: 'Space Invaders', quote: 'Insert coin to play.' },
+        'amiko-highcontrast': { label: 'High Contrast', quote: 'Clarity over obscurity, precision over noise.' },
+        'amiko-nordic': { label: 'Nordic Slate', quote: 'Simplicity is the ultimate sophistication.' }
     };
 
     getThemeMeta(themeId) {
@@ -994,6 +999,13 @@ class SettingsPanel {
                 crtCheckbox.checked = data.crt_enabled;
                 this.applyCrt(data.crt_enabled);
             }
+            // Sync Live Background toggle state from server
+            const bgEnabled = data.bg_effect_enabled !== false;
+            const bgCheckbox = document.getElementById('bgEffectToggle');
+            if (bgCheckbox) bgCheckbox.checked = bgEnabled;
+            const bgIfaceCheckbox = document.getElementById('bgEffectInterfaceToggle');
+            if (bgIfaceCheckbox) bgIfaceCheckbox.checked = bgEnabled;
+            this.applyBgEffect(bgEnabled);
         } catch (e) {
             console.error('[Settings] Error loading themes:', e);
         }
@@ -1108,6 +1120,40 @@ class SettingsPanel {
 
     applyCrt(enabled) {
         document.body.classList.toggle('no-crt', !enabled);
+    }
+
+    // --- Live Background Effect toggle ---
+
+    initBgEffectToggle() {
+        const bgCheckbox = document.getElementById('bgEffectToggle');
+        if (bgCheckbox) {
+            bgCheckbox.addEventListener('change', () => {
+                this.toggleBgEffect(bgCheckbox.checked);
+            });
+        }
+        const bgIfaceCheckbox = document.getElementById('bgEffectInterfaceToggle');
+        if (bgIfaceCheckbox) {
+            bgIfaceCheckbox.addEventListener('change', () => {
+                this.toggleBgEffect(bgIfaceCheckbox.checked);
+            });
+        }
+    }
+
+    async toggleBgEffect(enabled) {
+        await this.api('PUT', '/api/settings/bg-effect', { enabled });
+        const bgCheckbox = document.getElementById('bgEffectToggle');
+        if (bgCheckbox) bgCheckbox.checked = enabled;
+        const bgIfaceCheckbox = document.getElementById('bgEffectInterfaceToggle');
+        if (bgIfaceCheckbox) bgIfaceCheckbox.checked = enabled;
+        if (window.amikoUiPrefs) window.amikoUiPrefs.bg_effect_enabled = enabled;
+        this.applyBgEffect(enabled);
+    }
+
+    applyBgEffect(enabled) {
+        document.body.classList.toggle('no-bg-effect', !enabled);
+        if (window.amikoBackground && typeof window.amikoBackground.setEnabled === 'function') {
+            window.amikoBackground.setEnabled(enabled);
+        }
     }
 
     // --- Vitals Display Mode ---
@@ -1277,6 +1323,13 @@ class SettingsPanel {
         const animChk = document.getElementById('animationsEnabled');
         if (animChk) animChk.checked = prefs.animations_enabled !== false;
 
+        // Live Desktop Background
+        const bgEnabled = prefs.bg_effect_enabled !== false;
+        const bgIfaceChk = document.getElementById('bgEffectInterfaceToggle');
+        if (bgIfaceChk) bgIfaceChk.checked = bgEnabled;
+        const bgThemeChk = document.getElementById('bgEffectToggle');
+        if (bgThemeChk) bgThemeChk.checked = bgEnabled;
+
         // WinBox buttons
         const btnMap = { min: 'wbBtnMin', max: 'wbBtnMax', full: 'wbBtnFull' };
         const active = new Set(prefs.winbox_buttons || ['min', 'max', 'full', 'close']);
@@ -1307,6 +1360,7 @@ class SettingsPanel {
         const ui_font_size = parseInt(document.getElementById('uiFontSize')?.value ?? 13);
         const clock_format = document.querySelector('input[name="clockFormat"]:checked')?.value ?? '24h';
         const animations_enabled = document.getElementById('animationsEnabled')?.checked !== false;
+        const bg_effect_enabled = document.getElementById('bgEffectInterfaceToggle')?.checked !== false;
 
         // WinBox buttons
         const buttons = ['close'];
@@ -1326,6 +1380,7 @@ class SettingsPanel {
                 ui_font_size,
                 clock_format,
                 animations_enabled,
+                bg_effect_enabled,
                 winbox_buttons: buttons,
                 explorer_max_file_mb,
                 explorer_show_hidden,
@@ -1372,8 +1427,14 @@ class SettingsPanel {
         //    Modules use var(--content-font-size) — apply it to .amiko-module wrappers
         root.style.setProperty('--content-font-size', (fs + 1) + 'px');
 
-        // 4. Animations → toggle class on <html>
-        root.classList.toggle('no-animations', !prefs.animations_enabled);
+        // 4. Animations & Live Background → toggle class on <html> and update canvas engine
+        const animEnabled = prefs.animations_enabled !== false;
+        const bgEnabled = prefs.bg_effect_enabled !== false;
+        root.classList.toggle('no-animations', !animEnabled);
+        this.applyBgEffect(bgEnabled);
+        if (window.amikoBackground && typeof window.amikoBackground.setAnimationsEnabled === 'function') {
+            window.amikoBackground.setAnimationsEnabled(animEnabled);
+        }
 
         // 5. Clock format → force immediate update
         if (window.AmikoDragDrop && typeof window.AmikoDragDrop._updateClock === 'function') {
@@ -1490,8 +1551,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     };
                 }
             }
-            // Apply CRT state on boot
+            // Apply CRT & Live Background state on boot
             document.body.classList.toggle('no-crt', !data.crt_enabled);
+            const bgOn = data.bg_effect_enabled !== false;
+            document.body.classList.toggle('no-bg-effect', !bgOn);
+            if (window.amikoBackground) {
+                window.amikoBackground.setEnabled(bgOn);
+                if (data.active_theme) window.amikoBackground.setTheme(data.active_theme);
+            }
         })
         .catch(() => { });
 
@@ -1508,7 +1575,14 @@ document.addEventListener('DOMContentLoaded', () => {
             root.style.setProperty('--font-size-small',    (fs - 1) + 'px');
             root.style.setProperty('--font-size-large',    (fs + 2) + 'px');
             root.style.setProperty('--content-font-size',  (fs + 1) + 'px');
-            root.classList.toggle('no-animations', !prefs.animations_enabled);
+            const animOn = prefs.animations_enabled !== false;
+            root.classList.toggle('no-animations', !animOn);
+            if (window.amikoBackground) {
+                window.amikoBackground.setAnimationsEnabled(animOn);
+                if (prefs.bg_effect_enabled !== undefined) {
+                    window.amikoBackground.setEnabled(prefs.bg_effect_enabled !== false);
+                }
+            }
         })
         .catch(() => {
             window.amikoUiPrefs = {

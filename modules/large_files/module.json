@@ -5,5 +5,25 @@
     "index": 20,
     "description": "Analyzes the disk of remote servers to find huge folders or files occupying too much space.",
     "author": "Alessio Saponaro",
-    "site": ""
+    "site": "",
+    "permissions": {
+        "allowed_roles": [
+            "admin",
+            "operator",
+            "viewer"
+        ],
+        "capabilities": [
+            "sftp_read"
+        ],
+        "requires_connection": true,
+        "write_endpoints": []
+    },
+    "integrity": {
+        "algorithm": "sha256",
+        "files": {
+            "template.html": "5593adb204136a66a2aa388e7b5e017c1d3babba341ada6d8ff16b17e2c29d34",
+            "client.js": "b01c126b01acbdaeac82c55995169efecb3b36601536fc9cbb2c119f1cb6c18a",
+            "backend.py": "b5cfc7560b7870f5ae22aba41834a533daa323992b61a8b7aeb00c1840aae50e"
+        }
+    }
 }

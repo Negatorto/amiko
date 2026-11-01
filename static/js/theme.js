@@ -6,6 +6,17 @@
  * to remain agnostic to hardcoded colors and react to global CSS theme changes.
  */
 
+function _detectActiveThemeId() {
+    const link = document.getElementById('theme-stylesheet');
+    if (link && link.getAttribute('href')) {
+        const m = link.getAttribute('href').match(/themes\/([a-z0-9_-]+)\.css/i);
+        if (m && m[1]) return m[1];
+    }
+    return 'amiko-theme';
+}
+
+window.AMIKO_ACTIVE_THEME_ID = _detectActiveThemeId();
+
 window.AMIKO_THEME = (function () {
     const style = getComputedStyle(document.documentElement);
     const getVar = (name, fallback) => style.getPropertyValue(name).trim() || fallback;
@@ -36,7 +47,9 @@ function refreshThemeVars() {
     const style = getComputedStyle(document.documentElement);
     const getVar = (name, fallback) => style.getPropertyValue(name).trim() || fallback;
 
+    window.AMIKO_ACTIVE_THEME_ID = _detectActiveThemeId();
     window.AMIKO_THEME = {
+        id: window.AMIKO_ACTIVE_THEME_ID,
         bg_primary: getVar('--bg-primary', '#0a0a0a'),
         bg_secondary: getVar('--bg-secondary', '#1a1a1a'),
         bg_tertiary: getVar('--bg-tertiary', '#2a2a2a'),
@@ -48,6 +61,6 @@ function refreshThemeVars() {
         accent_info: getVar('--accent-info', '#00aaff'),
     };
 
-    // Dispatch event so modules (like xterm) can react
+    // Dispatch event so modules (like xterm & live background) can react
     window.dispatchEvent(new CustomEvent('amikoThemeChanged', { detail: window.AMIKO_THEME }));
 }

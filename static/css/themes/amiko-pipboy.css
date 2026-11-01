@@ -1,0 +1,39 @@
+/**
+ * AMIKO Pip-Boy Theme
+ * "War. War never changes." - Fallout
+ * Inspired by Vault-Tec Pip-Boy 3000 & RobCo CRT Terminals
+ */
+
+:root {
+    /* Backgrounds: Deep Vault-Tec CRT Phosphor Black */
+    --bg-primary: #051408;
+    --bg-secondary: #0a2410;
+    --bg-tertiary: #113618;
+
+    /* Text & Outlines: Radioactive Pip-Boy Green */
+    --text-primary: #1afc40;
+    --text-secondary: #14b830;
+    --text-dim: rgba(26, 252, 64, 0.45);
+
+    /* Semantic Accents: Rads Amber & Vault Alert Red */
+    --accent-warning: #ffbf00;
+    --accent-danger: #ff2a2a;
+    --accent-info: #38f8d4;
+
+    /* Highlight & Amber */
+    --accent-highlight: #1afc40;
+    --accent-amber: #ffbf00;
+
+    /* Effects & Border */
+    --border: rgba(26, 252, 64, 0.3);
+    --border-medium: rgba(26, 252, 64, 0.2);
+    --glow-primary: rgba(26, 252, 64, 0.35);
+    --glow-warning: rgba(255, 191, 0, 0.35);
+
+    /* Typography */
+    --font-mono: 'Courier New', 'Consolas', 'Monaco', monospace;
+    --font-size-base: 15px;
+    --font-size-large: 17px;
+    --font-size-small: 13px;
+}
+

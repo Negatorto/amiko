@@ -99,11 +99,20 @@ def get_current_user():
 
 
 def filter_modules_for_user(modules, user):
-    """Filter active modules according to the user's role capabilities."""
+    """Filter active modules according to the user's role capabilities and each module's permission manifest."""
     if not user:
         return []
+    role = user.get("role", "viewer")
     blocked = set(user.get("capabilities", {}).get("blocked_modules", []))
-    return [m for m in modules if m["id"] not in blocked]
+    allowed = []
+    for m in modules:
+        if m["id"] in blocked:
+            continue
+        manifest_roles = (m.get("permissions") or {}).get("allowed_roles")
+        if manifest_roles and role not in manifest_roles:
+            continue
+        allowed.append(m)
+    return allowed
 
 
 def login_required(f):
@@ -269,8 +278,11 @@ def init_auth(app):
                 "success": False
             }), 403
 
-        # 4. Viewer Read-Only enforcement
+        # 4. Viewer Read-Only enforcement (core routes + module permission manifests)
         if role == "viewer":
+            from core.plugins import get_write_endpoints_map
+            manifest_write_map = get_write_endpoints_map()
+
             if path == "/ssh-command":
                 log_audit_event(
                     event_type="RBAC_ACCESS_DENIED",
@@ -285,17 +297,18 @@ def init_auth(app):
                     "success": False
                 }), 403
 
-            if path in EXPLORER_WRITE_PATHS:
+            if path in EXPLORER_WRITE_PATHS or path in manifest_write_map:
+                mod_label = manifest_write_map.get(path, "Explorer")
                 log_audit_event(
                     event_type="RBAC_ACCESS_DENIED",
                     status="DENIED",
                     severity="WARNING",
                     target={"resource": path},
-                    details={"reason": "Viewer role has read-only access in Explorer"}
+                    details={"reason": f"Viewer role has read-only access in {mod_label}"}
                 )
                 return jsonify({
-                    "error": "Least Privilege: Viewer role has read-only access in Explorer.",
-                    "message": "Least Privilege: Viewer role has read-only access in Explorer.",
+                    "error": f"Least Privilege: Viewer role has read-only access in {mod_label}.",
+                    "message": f"Least Privilege: Viewer role has read-only access in {mod_label}.",
                     "status": "error",
                     "success": False
                 }), 403
@@ -317,7 +330,7 @@ def init_auth(app):
         # 5. Server Group Access Enforcement for non-admin roles (operator & viewer)
         if role != "admin":
             # JSON POST endpoints carrying target server info
-            if path in ("/ssh-connect", "/ssh-command") or path.startswith("/explorer/"):
+            if path in ("/ssh-connect", "/ssh-command") or path.startswith(("/explorer/", "/services/")):
                 data = request.get_json(silent=True) or {}
                 server_id = data.get("server_id")
                 hostname = data.get("hostname")
@@ -348,7 +361,7 @@ def init_auth(app):
                     }), 403
 
             # SSE / GET endpoints carrying session_id or hostname
-            if path in ("/ssh-stats", "/search", "/search-large-files"):
+            if path in ("/ssh-stats", "/search", "/search-files", "/search-large-files"):
                 session_id = request.args.get("session_id")
                 if session_id and session_id in ssh_sessions:
                     s_data = ssh_sessions[session_id]

@@ -1,0 +1,40 @@
+/**
+ * AMIKO Nordic Slate Theme
+ * "Simplicity is the ultimate sophistication." - Leonardo da Vinci
+ * Ultra-clean, sober, elegant light theme for professional workplace operations
+ */
+
+:root {
+    /* Backgrounds: Clean Frosted Porcelain & Slate Whites */
+    --bg-primary: #f8fafc;
+    --bg-secondary: #f1f5f9;
+    --bg-tertiary: #e2e8f0;
+
+    /* Text & Outlines: Deep Charcoal Graphite & Nordic Sapphire */
+    --text-primary: #0f172a;
+    --text-secondary: #2563eb;
+    --text-dim: rgba(15, 23, 42, 0.45);
+
+    /* Semantic Accents: Nordic Amber, Crimson & Sky Blue */
+    --accent-warning: #d97706;
+    --accent-danger: #dc2626;
+    --accent-info: #0284c7;
+
+    /* Highlight & Amber */
+    --accent-highlight: #2563eb;
+    --accent-amber: #d97706;
+
+    /* Effects & Border: Soft Slate Lines */
+    --border: rgba(15, 23, 42, 0.16);
+    --border-medium: rgba(15, 23, 42, 0.1);
+    --glow-primary: rgba(37, 99, 235, 0.12);
+    --glow-warning: rgba(217, 119, 6, 0.15);
+    --wb-icon-filter: invert(0.85);
+
+    /* Typography */
+    --font-mono: 'Courier New', 'Consolas', 'Monaco', monospace;
+    --font-size-base: 15px;
+    --font-size-large: 17px;
+    --font-size-small: 13px;
+}
+

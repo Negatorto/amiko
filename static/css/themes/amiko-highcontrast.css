@@ -1,0 +1,39 @@
+/**
+ * AMIKO High Contrast Theme
+ * "Clarity over obscurity, precision over noise."
+ * High-legibility monochrome black & white with stark neon accents (WCAG AAA)
+ */
+
+:root {
+    /* Backgrounds: Pure Deep Black */
+    --bg-primary: #000000;
+    --bg-secondary: #121212;
+    --bg-tertiary: #222222;
+
+    /* Text & Outlines: Crisp Pure White & High-Vis Orange */
+    --text-primary: #ffffff;
+    --text-secondary: #ff8800;
+    --text-dim: #a0a0a0;
+
+    /* Semantic Accents: High Visibility Orange, Alert Red & Electric Cyan */
+    --accent-warning: #ff8800;
+    --accent-danger: #ff3333;
+    --accent-info: #00ffff;
+
+    /* Highlight & Amber */
+    --accent-highlight: #ffffff;
+    --accent-amber: #ff8800;
+
+    /* Effects & Border: High-definition 1px crisp borders */
+    --border: #ffffff;
+    --border-medium: rgba(255, 255, 255, 0.65);
+    --glow-primary: rgba(255, 255, 255, 0.25);
+    --glow-warning: rgba(255, 136, 0, 0.35);
+
+    /* Typography */
+    --font-mono: 'Courier New', 'Consolas', 'Monaco', monospace;
+    --font-size-base: 15px;
+    --font-size-large: 17px;
+    --font-size-small: 13px;
+}
+

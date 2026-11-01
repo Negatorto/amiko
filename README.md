@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="static/img/AMIKO.png?v=0.7.1" alt="AMIKO Logo" width="230">
+  <img src="static/img/AMIKO.png?v=0.7.2" alt="AMIKO Logo" width="230">
 </p>
 
-# AMIKO v0.7.1
+# AMIKO v0.7.2
 
 
 **Advanced Multi-function Interface Kit for Operations**
@@ -10,6 +10,27 @@
 AMIKO is a modular, web-based dashboard for remote server management built around a **desktop-environment UI** inspired by Ubuntu/GNOME. Each tool runs as an independent floating window (powered by WinBox.js) opened from a vertical sidebar dock.
 
 Built with Flask and WebSocket, it connects to remote servers via SSH/SFTP and presents all operations through a single, unified interface.
+
+---
+
+## What's New in v0.7.2
+
+- **Per-Theme Canvas Background Engine & Aesthetics Overhaul**:
+  - AMIKO now looks as good as it works! Introduced a high-performance 60 FPS HTML5 Canvas engine with 12 handcrafted, immersive visual themes:
+    - **Cyberpunk**: Multi-layer Night City skyline with deep atmospheric sky gradients, volumetric light beams, glowing megatower window grids, and floating illuminated AVs.
+    - **Batman**: Minimalist pitch-black stealth cowl silhouette with glowing white eyes that track mouse gaze and squint on click, accented with rare distant lightning flashes.
+    - **Classic**: Launchpad matrix grid with warm amber/orange tiles and subtle, rare (~9%) Ottanio accents with smooth 4–5s organic breathing fades.
+    - **Fallout Pip-Boy**: Amber-green phosphor terminal with `[ AMIKO-TEC OS V1.04 ]` telemetry and a clean, responsive reticle.
+    - **Space Invaders**: Vintage 8-bit marching alien fleet canvas without cluttering HUD overlays.
+    - **High Contrast**: Clean, distraction-free geometric backdrop with high-visibility vibrant orange accents.
+    - **Nordic Slate**: Sober, undulating topological sine waves for focused, professional workspaces.
+    - **Matrix, Synthwave, Barbie, Pacman, AMIKO Base**: Fine-tuned canvas animations with smooth transitions and zero layout disruption.
+- **Declarative Module Permission Manifests & Integrity Verification**:
+  - `module.json` declarative security manifests specify `allowed_roles`, granular `capabilities`, and `write_endpoints`.
+  - Integrity verification engine (`utils/verify_modules.py`) with SHA-256 digests (`--sign`, `--verify`, `--status`) and strict enforcement preventing tampering.
+  - Server-side RBAC enforcement rejecting unauthorized module actions, even if client requests are forged.
+- **Modular Guidelines & Documentation**:
+  - Full developer documentation for module authoring, manifest schemas, and permission declaration in `MODULE_GUIDELINES.md`.
 
 ---
 
@@ -218,10 +239,16 @@ AMIKO ships more themes, ranging from dark terminals to light palettes. Each the
 
 New modules can be added without modifying the core application. Each module lives in its own folder under `modules/` and consists of:
 
-- `module.json` — metadata (name, icon, description)
+- `module.json` — metadata (name, icon, description), declarative `permissions` manifest, and SHA-256 `integrity` digests
 - `template.html` — the UI fragment rendered inside a WinBox window
 - `client.js` — frontend logic (class-based, scoped to the module container)
 - `backend.py` *(optional)* — Flask Blueprint for server-side API routes
+
+After creating or modifying a module, sign its integrity manifest:
+```bash
+python3 utils/verify_modules.py --sign
+python3 utils/verify_modules.py --status
+```
 
 See [MODULE_GUIDELINES.md](MODULE_GUIDELINES.md) for the complete development guide.
 
@@ -238,7 +265,7 @@ AMIKO is in early development (v0.7). The core architecture is functional, but t
 - [x] Standardize all modules icons to SVG format
 - [x] Add favicon
 - [x] Self-host all third-party frontend libraries (`static/lib/`) to remove external CDN dependencies
-- [ ] Module permission manifests (`module.json`) and plugin integrity verification
+- [x] Module permission manifests (`module.json`) and plugin integrity verification
 
 ### Security & Access Control
 - [x] Login screen with session authentication

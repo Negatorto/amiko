@@ -1,0 +1,39 @@
+/**
+ * AMIKO Space Invaders Theme
+ * "Insert Coin to Play." - Taito, 1978
+ * Inspired by the classic 8-bit arcade space invasion
+ */
+
+:root {
+    /* Backgrounds: Deep Arcade Space */
+    --bg-primary: #04040a;
+    --bg-secondary: #0c0c18;
+    --bg-tertiary: #16162a;
+
+    /* Text & Outlines: 8-Bit Alien Green & Mystery UFO Red */
+    --text-primary: #55ff55;
+    --text-secondary: #ff3366;
+    --text-dim: rgba(85, 255, 85, 0.4);
+
+    /* Semantic Accents: Score Gold & Laser Red */
+    --accent-warning: #ffff44;
+    --accent-danger: #ff2255;
+    --accent-info: #33ccff;
+
+    /* Highlight & Amber */
+    --accent-highlight: #55ff55;
+    --accent-amber: #ffff44;
+
+    /* Effects & Border */
+    --border: rgba(85, 255, 85, 0.35);
+    --border-medium: rgba(85, 255, 85, 0.2);
+    --glow-primary: rgba(85, 255, 85, 0.35);
+    --glow-warning: rgba(255, 255, 68, 0.35);
+
+    /* Typography */
+    --font-mono: 'Courier New', 'Consolas', 'Monaco', monospace;
+    --font-size-base: 15px;
+    --font-size-large: 17px;
+    --font-size-small: 13px;
+}
+

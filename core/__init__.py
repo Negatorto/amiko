@@ -49,18 +49,21 @@ def apply_security_headers(response):
     return response
 
 
-# Load modules on startup
-active_modules = load_modules(app)
+if os.environ.get('AMIKO_CLI_MODE') == '1':
+    active_modules = []
+else:
+    # Load modules on startup
+    active_modules = load_modules(app)
 
-# Register RBAC & Least Privilege guards
-init_auth(app)
+    # Register RBAC & Least Privilege guards
+    init_auth(app)
 
-# L7 firewall & Fail2Ban middleware (outermost layer: wraps Flask and Socket.IO)
-init_firewall(app)
+    # L7 firewall & Fail2Ban middleware (outermost layer: wraps Flask and Socket.IO)
+    init_firewall(app)
 
-# Security email notifications (audit trail subscriber)
-init_notifier(app)
+    # Security email notifications (audit trail subscriber)
+    init_notifier(app)
 
-# Import routes and handlers so they are registered
-from core import routes
-from core import handlers
+    # Import routes and handlers so they are registered
+    from core import routes
+    from core import handlers

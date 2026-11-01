@@ -51,12 +51,20 @@ DEFAULT_SETTINGS = {
     "active_theme": "amiko-theme",
     "themes_enabled": {
         "amiko-theme": True,
-        "amiko-retro": True,
+        "amiko-matrix": True,
         "amiko-cyberpunk": True,
         "amiko-batman": True,
-        "amiko-barbie": True
+        "amiko-barbie": True,
+        "amiko-classic": True,
+        "amiko-synthwave": True,
+        "amiko-pacman": True,
+        "amiko-pipboy": True,
+        "amiko-spaceinvaders": True,
+        "amiko-highcontrast": True,
+        "amiko-nordic": True
     },
     "crt_enabled": True,
+    "bg_effect_enabled": True,
     "smtp": DEFAULT_SMTP,
     "ui_prefs": {
         "explorer_max_file_mb": 10,
@@ -680,7 +688,7 @@ class SettingsManager:
             return self._settings["themes_enabled"][theme_name]
         return None
 
-    # --- CRT Effect ---
+    # --- CRT Effect & Live Background ---
 
     def get_crt_enabled(self):
         return self._settings.get("crt_enabled", True)
@@ -690,6 +698,14 @@ class SettingsManager:
         self._save()
         return self._settings["crt_enabled"]
 
+    def get_bg_effect_enabled(self):
+        return self._settings.get("bg_effect_enabled", True)
+
+    def set_bg_effect_enabled(self, enabled):
+        self._settings["bg_effect_enabled"] = bool(enabled)
+        self._save()
+        return self._settings["bg_effect_enabled"]
+
     # --- UI Preferences ---
 
     _UI_DEFAULTS = {
@@ -698,6 +714,7 @@ class SettingsManager:
         "ui_font_size": 13,
         "clock_format": "24h",
         "animations_enabled": True,
+        "bg_effect_enabled": True,
         "explorer_show_hidden": False,
         "explorer_confirm_delete": True
     }
@@ -707,6 +724,7 @@ class SettingsManager:
         # Merge with defaults for forward-compatibility
         merged = dict(self._UI_DEFAULTS)
         merged.update(stored)
+        merged["bg_effect_enabled"] = self.get_bg_effect_enabled()
         return merged
 
     def set_ui_prefs(self, prefs: dict):
@@ -731,6 +749,11 @@ class SettingsManager:
         # Animations toggle
         if "animations_enabled" in prefs:
             current["animations_enabled"] = bool(prefs["animations_enabled"])
+        # Live desktop background toggle
+        if "bg_effect_enabled" in prefs:
+            bg_val = bool(prefs["bg_effect_enabled"])
+            current["bg_effect_enabled"] = bg_val
+            self._settings["bg_effect_enabled"] = bg_val
         # Explorer: show hidden files
         if "explorer_show_hidden" in prefs:
             current["explorer_show_hidden"] = bool(prefs["explorer_show_hidden"])

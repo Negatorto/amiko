@@ -5,5 +5,27 @@
     "index": 30,
     "description": "Multi-file notepad with manual save, sharing controls (private, public, per-server), and desktop post-it icons.",
     "author": "Alessio Saponaro",
-    "site": ""
+    "site": "",
+    "permissions": {
+        "allowed_roles": [
+            "admin",
+            "operator",
+            "viewer"
+        ],
+        "capabilities": [
+            "local_vault"
+        ],
+        "requires_connection": true,
+        "write_endpoints": [
+            "/notes/create"
+        ]
+    },
+    "integrity": {
+        "algorithm": "sha256",
+        "files": {
+            "template.html": "2020d229dc9b39916be12ded1cce953319586154cb6e86316281b0bcf2d416aa",
+            "client.js": "c55dcad2dbe6a203be6ec7f71d06b9778aeda51dc2891cdda639b099582bb804",
+            "backend.py": "ac1887cf2b6eec20d52ee0bae78e0d2b44008cb948d1882305fd38098c8ae2ff"
+        }
+    }
 }

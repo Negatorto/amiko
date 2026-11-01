@@ -5,6 +5,28 @@
     "index": 15,
     "description": "Manage active system services, listening network ports with one-click web launcher, and Docker/Podman containers.",
     "author": "Alessio Saponaro",
-    "site": ""
+    "site": "",
+    "permissions": {
+        "allowed_roles": [
+            "admin",
+            "operator",
+            "viewer"
+        ],
+        "capabilities": [
+            "ssh_exec"
+        ],
+        "requires_connection": true,
+        "write_endpoints": [
+            "/services/action",
+            "/services/container-action"
+        ]
+    },
+    "integrity": {
+        "algorithm": "sha256",
+        "files": {
+            "template.html": "f345982795ec6fcd9d49bff929eb51f95c78e1dd6517e8d35ed34315324fa76a",
+            "client.js": "05caf9d569d9a5850ff5f076cf6efb6168f6f58d141a1dbfcd49fd6ffddd8803",
+            "backend.py": "79d5e157e833803d9fc492c327a91062c98e95ed6041abb1ecd9ce2c06af860c"
+        }
+    }
 }
-

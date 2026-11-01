@@ -182,9 +182,11 @@
     text-transform: uppercase;
 }
 
-/* Hide empty state when windows are open */
-.amiko-desktop.has-windows .empty-desktop-message {
-    opacity: 0;
+/* Hide empty state when windows are open or when live background animation is active */
+.amiko-desktop.has-windows .empty-desktop-message,
+.amiko-desktop.has-bg-effect .empty-desktop-message {
+    opacity: 0 !important;
+    visibility: hidden;
 }
 
 /* ═══════════════════════════════════════════

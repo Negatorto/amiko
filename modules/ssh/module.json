@@ -5,5 +5,26 @@
     "index": 0,
     "description": "Native web-based SSH terminal for secure server connections.",
     "author": "Alessio Saponaro",
-    "site": ""
+    "site": "",
+    "permissions": {
+        "allowed_roles": [
+            "admin",
+            "operator"
+        ],
+        "capabilities": [
+            "ssh_shell",
+            "ssh_exec"
+        ],
+        "requires_connection": true,
+        "write_endpoints": [
+            "/ssh-command"
+        ]
+    },
+    "integrity": {
+        "algorithm": "sha256",
+        "files": {
+            "template.html": "1bd48a5e9758ee3c72bb898cbbf7edf54ea90f90fe59d8f0c04e97b6e1016e21",
+            "client.js": "ac8e89472d9038ca2117cae8b6ae7f6ae077c7c316046cbd8d3f7ff5c348d179"
+        }
+    }
 }

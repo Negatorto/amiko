@@ -5,6 +5,25 @@
     "index": 20,
     "description": "Searches for files by name/pattern and searches for specific textual keywords inside files across remote servers.",
     "author": "Alessio Saponaro",
-    "site": ""
+    "site": "",
+    "permissions": {
+        "allowed_roles": [
+            "admin",
+            "operator",
+            "viewer"
+        ],
+        "capabilities": [
+            "sftp_read"
+        ],
+        "requires_connection": true,
+        "write_endpoints": []
+    },
+    "integrity": {
+        "algorithm": "sha256",
+        "files": {
+            "template.html": "89b457178e6eda49efe5dc0224d8032c9d3f0b4b0cbec2f4a12af05f6af4a5ab",
+            "client.js": "a01ca1229adfbd94eaa8167fe4fb8d1518f1f466975deb9071829a1593254f85",
+            "backend.py": "76f3804b8cd6b0159a4ff2aaa0be3284e81b6ce9e19b93650411725991c5fb5c"
+        }
+    }
 }
-
