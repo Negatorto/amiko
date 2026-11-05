@@ -242,6 +242,15 @@
 
         <div class="login-error" id="loginError"></div>
 
+        <!-- STEP 0: VAULT UNSEAL FORM (Shown when Vault is Sealed in RAM) -->
+        <form id="unsealForm" style="display: none;">
+            <div class="login-field">
+                <label for="vaultPassphrase">Master Passphrase</label>
+                <input type="password" id="vaultPassphrase" name="passphrase" placeholder="••••••••••••" autocomplete="off" required>
+            </div>
+            <button type="submit" class="login-btn" id="unsealSubmitBtn">UNSEAL VAULT</button>
+        </form>
+
         <!-- STEP 1: CREDENTIALS FORM -->
         <form id="loginForm">
             <div class="login-field">
@@ -306,6 +315,9 @@
             .catch(() => {});
 
         const loginCard = document.getElementById('loginCard');
+        const unsealForm = document.getElementById('unsealForm');
+        const unsealSubmitBtn = document.getElementById('unsealSubmitBtn');
+        const vaultPassphrase = document.getElementById('vaultPassphrase');
         const loginForm = document.getElementById('loginForm');
         const totpForm = document.getElementById('totpForm');
         const errBox = document.getElementById('loginError');
@@ -335,9 +347,26 @@
             errBox.textContent = '';
         }
 
+        function showVaultUnseal() {
+            hideError();
+            loginCard.classList.remove('is-setup');
+            unsealForm.style.display = 'block';
+            loginForm.style.display = 'none';
+            totpForm.style.display = 'none';
+            stepHeader.style.display = 'block';
+            stepDesc.style.display = 'block';
+            stepHeader.textContent = '🔒 VAULT SEALED';
+            stepDesc.textContent = 'Il vault cifrato di AMIKO è bloccato. Inserisci la Master Passphrase per decifrare la chiave in memoria RAM.';
+            unsealSubmitBtn.disabled = false;
+            unsealSubmitBtn.textContent = 'UNSEAL VAULT';
+            vaultPassphrase.value = '';
+            vaultPassphrase.focus();
+        }
+
         function showStep1() {
             hideError();
             loginCard.classList.remove('is-setup');
+            unsealForm.style.display = 'none';
             loginForm.style.display = 'block';
             totpForm.style.display = 'none';
             stepHeader.style.display = 'none';
@@ -346,6 +375,57 @@
             loginSubmitBtn.textContent = 'SIGN IN';
             document.getElementById('loginUsername').focus();
         }
+
+        // Check on load whether the encrypted vault is sealed
+        fetch('/api/vault/status')
+            .then(r => r.json())
+            .then(v => {
+                if (v && v.sealed) {
+                    showVaultUnseal();
+                }
+            })
+            .catch(() => {});
+
+        // Step 0: Unseal Vault with Master Passphrase
+        unsealForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideError();
+            unsealSubmitBtn.disabled = true;
+            unsealSubmitBtn.textContent = 'UNSEALING...';
+
+            const passphrase = vaultPassphrase.value;
+            try {
+                const res = await fetch('/api/vault/unseal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ passphrase })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data.success) {
+                    // Refresh theme now that settings are decrypted
+                    fetch('/api/themes')
+                        .then(r => r.json())
+                        .then(t => {
+                            if (t.active_theme) {
+                                const link = document.getElementById('theme-stylesheet');
+                                if (link) link.href = `/static/css/themes/${t.active_theme}.css`;
+                            }
+                            document.body.classList.toggle('no-crt', !t.crt_enabled);
+                        })
+                        .catch(() => {});
+                    showStep1();
+                } else {
+                    showError(data.error || 'Passphrase non valida.');
+                    unsealSubmitBtn.disabled = false;
+                    unsealSubmitBtn.textContent = 'UNSEAL VAULT';
+                    vaultPassphrase.select();
+                }
+            } catch (err) {
+                showError(err.message || 'Errore di rete durante lo sblocco del vault.');
+                unsealSubmitBtn.disabled = false;
+                unsealSubmitBtn.textContent = 'UNSEAL VAULT';
+            }
+        });
 
         function showStep2(data) {
             hideError();
@@ -431,6 +511,12 @@
                     data = JSON.parse(text);
                 } catch (_) {
                     throw new Error(`Server error (${res.status}).`);
+                }
+
+                if (data.vault_sealed) {
+                    showVaultUnseal();
+                    showError(data.error || 'Vault is sealed.');
+                    return;
                 }
 
                 if (data.requires_2fa) {

@@ -29,6 +29,8 @@ def main():
         sys.exit(0)
 
     mgr = SettingsManager()
+    if not mgr.ensure_cli_unsealed():
+        sys.exit(1)
     users = mgr.get_users(safe=False)
 
     if sys.argv[1] in ("--list", "-l"):

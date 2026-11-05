@@ -37,6 +37,7 @@ from cryptography.fernet import Fernet
 
 from core.audit import log_audit_event
 from core.client_ip import parse_ip, is_trusted_proxy, client_ip_from_environ
+from core.config import settings
 from utils.settings_manager import DATA_DIR, KEY_FILE
 
 FIREWALL_FILE = os.path.join(DATA_DIR, "firewall.json.enc")
@@ -403,25 +404,13 @@ class KernelSync:
 
 # ── Firewall & Fail2Ban manager ──────────────────────────────────────────────
 
-def _load_key() -> bytes:
-    os.makedirs(DATA_DIR, exist_ok=True)
-    if os.path.exists(KEY_FILE):
-        with open(KEY_FILE, "rb") as f:
-            return f.read()
-    key = Fernet.generate_key()
-    with open(KEY_FILE, "wb") as f:
-        f.write(key)
-    os.chmod(KEY_FILE, 0o600)
-    return key
-
-
 class FirewallManager:
     """Thread-safe, persistent firewall rule engine and Fail2Ban jail manager."""
 
     def __init__(self, path=FIREWALL_FILE):
         self._path = path
         self._lock = threading.RLock()
-        self._fernet = Fernet(_load_key())
+        self._fernet = settings.get_fernet()
         self._file_sig = None
         self._last_stat = 0.0
         self._config = self._load()
@@ -430,6 +419,35 @@ class FirewallManager:
         self._kernel_dirty = True
         self.kernel = KernelSync()
         self._sweeper_started = False
+        settings.register_unseal_listener(self._on_vault_unsealed)
+        settings.register_rotate_listener(self._on_key_rotated)
+
+    def _on_vault_unsealed(self, fernet):
+        """Called when the AMIKO vault is unsealed in RAM; loads encrypted firewall config and merges early bans."""
+        with self._lock:
+            early_bans = dict(self._config.get("bans") or {})
+            early_history = dict(self._config.get("ban_history") or {})
+            self._fernet = fernet
+            self._config = self._load()
+            merged = False
+            for ip, b_info in early_bans.items():
+                if ip not in self._config["bans"]:
+                    self._config["bans"][ip] = b_info
+                    merged = True
+            for ip, h_list in early_history.items():
+                if ip not in self._config["ban_history"]:
+                    self._config["ban_history"][ip] = h_list
+                    merged = True
+            if merged:
+                self._save()
+            self._kernel_dirty = True
+
+    def _on_key_rotated(self, old_fernet, new_fernet):
+        """Called when the AMIKO vault DEK is rotated; re-encrypts firewall.json.enc with the new key."""
+        with self._lock:
+            self._fernet = new_fernet
+            if os.path.exists(self._path):
+                self._save()
 
     # --- Persistence ---
 
@@ -442,6 +460,9 @@ class FirewallManager:
 
     def _load(self) -> dict:
         config = default_config()
+        if self._fernet is None:
+            self._file_sig = None
+            return config
         self._file_sig = self._stat_sig()
         if self._file_sig is None:
             return config
@@ -472,6 +493,10 @@ class FirewallManager:
         return config
 
     def _save(self):
+        if self._fernet is None:
+            self._fernet = settings.get_fernet()
+        if self._fernet is None:
+            return
         os.makedirs(os.path.dirname(self._path), exist_ok=True)
         token = self._fernet.encrypt(json.dumps(self._config).encode("utf-8"))
         tmp = f"{self._path}.tmp"
@@ -483,6 +508,10 @@ class FirewallManager:
 
     def _maybe_reload(self, force=False):
         """Pick up changes written by another process (break-glass CLI). Caller holds the lock."""
+        if self._fernet is None:
+            self._fernet = settings.get_fernet()
+            if self._fernet is None:
+                return
         now = time.time()
         if not force and now - self._last_stat < 1.0:
             return

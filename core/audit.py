@@ -13,7 +13,12 @@ import time
 import hashlib
 import threading
 from datetime import datetime, timezone
-from flask import request, has_request_context
+try:
+    from flask import request, has_request_context
+except ImportError:
+    request = None
+    def has_request_context():
+        return False
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 AUDIT_LOG_FILE = os.path.join(DATA_DIR, "audit.log")

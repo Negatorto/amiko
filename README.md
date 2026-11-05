@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="static/img/AMIKO.png?v=0.7.2" alt="AMIKO Logo" width="230">
+  <img src="static/img/AMIKO.png?v=0.7.3" alt="AMIKO Logo" width="230">
 </p>
 
-# AMIKO v0.7.2
+# AMIKO v0.7.3
 
 
 **Advanced Multi-function Interface Kit for Operations**
@@ -10,6 +10,32 @@
 AMIKO is a modular, web-based dashboard for remote server management built around a **desktop-environment UI** inspired by Ubuntu/GNOME. Each tool runs as an independent floating window (powered by WinBox.js) opened from a vertical sidebar dock.
 
 Built with Flask and WebSocket, it connects to remote servers via SSH/SFTP and presents all operations through a single, unified interface.
+
+---
+
+## What's New in v0.7.3
+
+- **Vault Key Protection & OS Keyring Integration**:
+  - **Decoupled Vault Security**: Sensitive configuration, server credentials, notes, and firewall rules encrypted with Fernet AES-128-CBC are no longer tied exclusively to the local disk key (`data/.amiko_key`).
+  - **3 Protection Modes**:
+    - **Local Key File (`local_file`)**: Classic unattended startup mode with `data/.amiko_key` guarded at `0600` permissions.
+    - **OS Keyring (`os_keyring`)**: Securely stores the 256-bit Fernet Data Encryption Key (DEK) in the host's native credential store (Freedesktop Secret Service / `secret-tool`, Linux Kernel User Keyring `@u`, macOS Keychain, or `python-keyring`), immediately overwriting and wiping `data/.amiko_key` from disk blocks. Includes optional Recovery Passphrase for cold-boot fallback.
+    - **Master Passphrase (`passphrase`)**: Wraps the DEK using PBKDF2-HMAC-SHA256 (600,000 iterations + 16-byte random salt) in `data/vault_meta.json`, wiping `data/.amiko_key` from disk.
+  - **Runtime Seal / Unseal Flow**:
+    - When protected by a Master Passphrase, AMIKO boots in a **SEALED** state (protecting server secrets in case of stolen disk images or VM snapshots).
+    - Unseal the vault directly from the web login screen (`/login`) via dedicated Master Passphrase challenge or using the `AMIKO_MASTER_PASSPHRASE` / `AMIKO_VAULT_KEY` environment variables.
+    - Admins can lock the vault into RAM-sealed mode at any moment with **Seal Vault Now**.
+  - **Atomic Key Rotation (`Rotate DEK`)**:
+    - Generate a fresh 256-bit Fernet key and atomically re-encrypt all encrypted at-rest stores (`settings.json.enc`, `notes_data.enc`, and `firewall.json.enc`) without service interruption.
+  - **Dedicated Vault CLI (`utils/vault_ctl.py`)**:
+    - Command-line tool for server administrators to inspect vault status, switch modes, rotate keys, and unseal without web access:
+      ```bash
+      python3 utils/vault_ctl.py --status           # Inspect vault state, key ID, and OS keyring backend
+      python3 utils/vault_ctl.py --set-passphrase   # Wrap DEK with Master Passphrase and wipe .amiko_key
+      python3 utils/vault_ctl.py --set-keyring      # Move DEK to OS Keyring and wipe .amiko_key
+      python3 utils/vault_ctl.py --set-local-file   # Restore DEK to data/.amiko_key (unattended mode)
+      python3 utils/vault_ctl.py --rotate-key       # Generate new DEK and atomically re-encrypt all stores
+      ```
 
 ---
 
@@ -182,6 +208,23 @@ AMIKO emails security events from the audit trail to a single security contact (
 - **Reliability**: emails are sent in the background with non-blocking retries (5 s / 30 s / 2 min). Every outcome is audited (`NOTIFY_SENT` / `NOTIFY_FAILED`).
 - **Anti-tampering**: any change to the notification settings is reported to the previous recipient.
 
+### Encrypted Vault Key Protection & OS Keyring (Settings → Interface)
+
+AMIKO encrypts all sensitive stores at rest (`data/settings.json.enc`, `data/notes_data.enc`, `data/firewall.json.enc`) using a 256-bit Fernet Data Encryption Key (DEK). Administrators can choose how that DEK is protected:
+
+1. **Local Key File (`local_file`, default)**: The DEK is stored in `data/.amiko_key` (`0600` permissions) for unattended server startup.
+2. **OS Keyring (`os_keyring`)**: The DEK is stored in the Operating System's native credential store (Freedesktop Secret Service / `secret-tool`, Linux Kernel User Keyring `@u`, macOS Keychain, or `python-keyring`) and `data/.amiko_key` is securely overwritten and wiped from disk. Supports an optional recovery passphrase for cold-boot fallback.
+3. **Master Passphrase (`passphrase`)**: The DEK is wrapped with a key derived from the administrator's Master Passphrase via `PBKDF2-HMAC-SHA256` (600,000 iterations) in `data/vault_meta.json`, and `data/.amiko_key` is securely wiped from disk. On startup (unless `AMIKO_MASTER_PASSPHRASE` or `AMIKO_VAULT_KEY` is provided in the environment), AMIKO starts in a **SEALED** state and prompts to unseal the vault in RAM on the login screen.
+
+- **Key Rotation & Manual Seal**: Administrators can rotate the DEK (atomically re-encrypting all vault stores) or manually seal the vault in RAM at any time from **Settings → Interface** or via the CLI tool:
+  ```bash
+  python3 utils/vault_ctl.py --status           # Inspect vault mode, key ID, and OS keyring backend
+  python3 utils/vault_ctl.py --set-passphrase   # Switch to Master Passphrase mode and wipe .amiko_key
+  python3 utils/vault_ctl.py --set-keyring      # Move key to OS Keyring and wipe .amiko_key
+  python3 utils/vault_ctl.py --set-local-file   # Restore key to data/.amiko_key
+  python3 utils/vault_ctl.py --rotate-key       # Rotate DEK and re-encrypt settings, notes, and firewall
+  ```
+
 ## Project Structure
 
 ```
@@ -275,7 +318,7 @@ AMIKO is in early development (v0.7). The core architecture is functional, but t
 - [x] Asymmetric SSH key authentication (`Ed25519` / `RSA`) and strict `known_hosts` host-key verification
 - [x] Deprecate plain-text FTP in favor of encrypted SFTP-only transport
 - [x] Production transport hardening (Same-Origin CSRF/CSWSH protection, Content Security Policy & security headers, idle session timeout, encrypted Notes at rest)
-- [ ] Master Passphrase / OS Keyring integration for the encrypted vault (decoupling the encryption key from local disk)
+- [x] Master Passphrase / OS Keyring integration for the encrypted vault (decoupling the encryption key from local disk)
 - [x] Multi-Factor Authentication (TOTP / 2FA with Google Authenticator, Emergency Recovery Codes, and Admin/CLI reset)
 - [x] Firewall & Fail2ban integration (L7 rule engine, multi-jail Fail2Ban, whitelist, kernel sync, delegated permission, break-glass CLI)
 - [x] Ports & Services dictionary and egress (OUTPUT) control for outbound SSH/SFTP connections
@@ -295,7 +338,6 @@ AMIKO is in early development (v0.7). The core architecture is functional, but t
 - [x] Connection panel as topbar popover + active VM name & IP indicator in bottom bar
 - [x] Material Design vector SVG icon system across Settings, Groups, Servers, and Explorer
 - [x] Settings panel improvements (export/import config, multi-column group cards, horizontal server form)
-- [ ] Enhanced text editor in Explorer (syntax highlighting, search/replace)
 
 ### Performance
 - [x] Persistent SSH & SFTP subsystem channel pooling in Explorer (eliminates per-request handshake and subsystem spawn overhead)

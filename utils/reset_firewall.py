@@ -20,6 +20,7 @@ import argparse
 from datetime import datetime
 
 # Add project root to sys.path
+os.environ["AMIKO_CLI_MODE"] = "1"
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
@@ -90,6 +91,9 @@ def main():
     group.add_argument("--disable-fail2ban", action="store_true", help="Disable Fail2Ban automatic banning")
     args = parser.parse_args()
 
+    from core.config import settings
+    if not settings.ensure_cli_unsealed():
+        sys.exit(1)
     fw = FirewallManager()
     # No background worker in a short-lived process: notifications are flushed before exit
     notifier = init_notifier(start_worker=False)

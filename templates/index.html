@@ -7,15 +7,15 @@
     <title>AMIKO - Advanced Multi-function Interface Kit for Operations</title>
 
     <!-- Custom CSS Themes -->
-    <link rel="stylesheet" id="theme-stylesheet" href="{{ url_for('static', filename='css/themes/amiko-theme.css') }}?v=0.7.1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=0.7.1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/connection.css') }}?v=0.7.1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules.css') }}?v=0.7.1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/terminal.css') }}?v=0.7.1">
+    <link rel="stylesheet" id="theme-stylesheet" href="{{ url_for('static', filename='css/themes/amiko-theme.css') }}?v=0.7.3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=0.7.3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/connection.css') }}?v=0.7.3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modules.css') }}?v=0.7.3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/terminal.css') }}?v=0.7.3">
     <!-- Xterm.js CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='lib/xterm/xterm.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/resource-bars.css') }}?v=0.7.1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}?v=0.7.1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/resource-bars.css') }}?v=0.7.3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}?v=0.7.3">
 
     <!-- GridStack.js CSS (kept for compat) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='lib/gridstack/gridstack.min.css') }}">
@@ -343,7 +343,7 @@
     <!-- BOTTOM BAR                                    -->
     <!-- ══════════════════════════════════════════════ -->
     <div class="bottom-bar" id="bottom-bar">
-        <span class="bottombar-brand">AMIKO v0.7.1</span>
+        <span class="bottombar-brand">AMIKO v0.7.3</span>
         <span class="bottombar-center"></span>
         <div class="bottombar-status">
             <span class="bottombar-dot" id="bottombarDot"></span>
@@ -739,6 +739,71 @@
                         <button class="iface-save-btn" id="ifaceSaveBtn" style="display:inline-flex; align-items:center; gap:6px;"><svg class="md-icon"><use href="#md-save"></use></svg> Save Interface Settings</button>
 
                         {% if current_user.role == 'admin' %}
+                        <div class="iface-section-divider" style="margin-top: 24px;">Vault Key Protection &amp; OS Keyring</div>
+                        <div class="iface-pref-group" id="vaultProtectionCard">
+                            <div class="iface-pref-header">
+                                <span class="iface-pref-icon">🔐</span>
+                                <div style="flex:1;">
+                                    <div class="iface-pref-title">Encrypted Vault Key Management (DEK)</div>
+                                    <div class="iface-pref-desc">Decouple the vault encryption key from local disk (<code>data/.amiko_key</code>) using a PBKDF2-SHA256 Master Passphrase or the Operating System Keyring.</div>
+                                </div>
+                            </div>
+
+                            <!-- Live Vault Status Telemetry -->
+                            <div id="vaultStatusTelemetry" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:8px; margin-top:12px; padding:10px; background:var(--bg-primary); border:1px solid var(--border); border-radius:4px; font-size:11px;">
+                                <div>
+                                    <div style="color:var(--text-dim); text-transform:uppercase; font-size:10px;">Active Mode</div>
+                                    <div id="vaultStatMode" style="font-weight:700; color:var(--accent-highlight); margin-top:2px;">Loading...</div>
+                                </div>
+                                <div>
+                                    <div style="color:var(--text-dim); text-transform:uppercase; font-size:10px;">Disk Key (.amiko_key)</div>
+                                    <div id="vaultStatDiskKey" style="font-weight:700; margin-top:2px;">—</div>
+                                </div>
+                                <div>
+                                    <div style="color:var(--text-dim); text-transform:uppercase; font-size:10px;">OS Keyring Backend</div>
+                                    <div id="vaultStatKeyring" style="font-weight:700; margin-top:2px;">—</div>
+                                </div>
+                                <div>
+                                    <div style="color:var(--text-dim); text-transform:uppercase; font-size:10px;">Active DEK Fingerprint</div>
+                                    <div id="vaultStatKeyId" style="font-weight:700; font-family:var(--font-mono); margin-top:2px;">—</div>
+                                </div>
+                            </div>
+
+                            <!-- Protection Mode Configuration -->
+                            <div style="display:flex; flex-direction:column; gap:10px; margin-top:12px;">
+                                <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                                    <label for="vaultModeSelect" style="font-size:11px; font-weight:700; color:var(--text-secondary); min-width:120px;">PROTECTION MODE</label>
+                                    <select id="vaultModeSelect" style="flex:1; min-width:240px; padding:8px 10px; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border); border-radius:4px; font-family:var(--font-mono); font-size:12px;">
+                                        <option value="local_file">Local Key File (data/.amiko_key — Auto-Unlock)</option>
+                                        <option value="os_keyring">OS Keyring (Kernel / Secret Service — Decoupled from Disk)</option>
+                                        <option value="passphrase">Master Passphrase (PBKDF2-SHA256 — Manual Unseal in RAM)</option>
+                                    </select>
+                                </div>
+
+                                <div id="vaultCurrentPassRow" style="display:none; flex-wrap:wrap; gap:10px; align-items:center;">
+                                    <label for="vaultCurrentPassphrase" style="font-size:11px; font-weight:700; color:var(--text-secondary); min-width:120px;">CURRENT PASSPHRASE</label>
+                                    <input type="password" id="vaultCurrentPassphrase" placeholder="Current Master Passphrase (required to modify)" style="flex:1; min-width:220px; padding:8px 10px; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border); border-radius:4px; font-family:var(--font-mono); font-size:12px;">
+                                </div>
+
+                                <div id="vaultNewPassRow" style="display:none; flex-wrap:wrap; gap:10px; align-items:center;">
+                                    <label for="vaultNewPassphrase" id="vaultNewPassLabel" style="font-size:11px; font-weight:700; color:var(--text-secondary); min-width:120px;">MASTER PASSPHRASE</label>
+                                    <input type="password" id="vaultNewPassphrase" placeholder="Min. 8 characters (wraps DEK with PBKDF2-SHA256)" style="flex:1; min-width:220px; padding:8px 10px; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border); border-radius:4px; font-family:var(--font-mono); font-size:12px;">
+                                </div>
+
+                                <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:4px;">
+                                    <button type="button" id="btnVaultApplyMode" style="padding:8px 14px; background:var(--accent-highlight); color:#fff; border:none; border-radius:4px; cursor:pointer; font-family:var(--font-mono); font-size:12px; font-weight:700; display:inline-flex; align-items:center; gap:5px;">
+                                        <svg class="md-icon"><use href="#md-shield"></use></svg> Apply Key Protection
+                                    </button>
+                                    <button type="button" id="btnVaultRotateKey" style="padding:8px 14px; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border); border-radius:4px; cursor:pointer; font-family:var(--font-mono); font-size:12px; display:inline-flex; align-items:center; gap:5px;" title="Generate a fresh 256-bit Fernet DEK and re-encrypt settings, notes, and firewall">
+                                        <svg class="md-icon"><use href="#md-refresh"></use></svg> Rotate DEK
+                                    </button>
+                                    <button type="button" id="btnVaultSealNow" style="display:none; padding:8px 14px; background:rgba(192, 57, 43, 0.15); color:var(--accent-danger); border:1px solid var(--accent-danger); border-radius:4px; cursor:pointer; font-family:var(--font-mono); font-size:12px; font-weight:700; align-items:center; gap:5px;" title="Wipe the encryption key from RAM immediately and require Master Passphrase to unseal">
+                                        🔒 Seal Vault Now
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="iface-section-divider" style="margin-top: 24px;">Optional Backup &amp; Portability</div>
                         <div class="iface-pref-group">
                             <div class="iface-pref-header">
@@ -777,18 +842,18 @@
     </script>
 
     <!-- App Scripts -->
-    <script src="{{ url_for('static', filename='js/theme.js') }}?v=0.7.1"></script>
-    <script src="{{ url_for('static', filename='js/background.js') }}?v=0.7.1"></script>
-    <script src="{{ url_for('static', filename='js/connection.js') }}?v=0.7.1"></script>
-    <script src="{{ url_for('static', filename='js/drag-drop.js') }}?v=0.7.1"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=0.7.1"></script>
-    <script src="{{ url_for('static', filename='js/settings.js') }}?v=0.7.1"></script>
-    <script src="{{ url_for('static', filename='js/firewall.js') }}?v=0.7.1"></script>
-    <script src="{{ url_for('static', filename='js/notifications.js') }}?v=0.7.1"></script>
+    <script src="{{ url_for('static', filename='js/theme.js') }}?v=0.7.3"></script>
+    <script src="{{ url_for('static', filename='js/background.js') }}?v=0.7.3"></script>
+    <script src="{{ url_for('static', filename='js/connection.js') }}?v=0.7.3"></script>
+    <script src="{{ url_for('static', filename='js/drag-drop.js') }}?v=0.7.3"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=0.7.3"></script>
+    <script src="{{ url_for('static', filename='js/settings.js') }}?v=0.7.3"></script>
+    <script src="{{ url_for('static', filename='js/firewall.js') }}?v=0.7.3"></script>
+    <script src="{{ url_for('static', filename='js/notifications.js') }}?v=0.7.3"></script>
 
     <!-- Dynamic Plugin Scripts -->
     {% for mod in modules %}
-    <script src="/static_modules/{{ mod.id }}/client.js?v=0.7.1"></script>
+    <script src="/static_modules/{{ mod.id }}/client.js?v=0.7.3"></script>
     {% endfor %}
 </body>
 

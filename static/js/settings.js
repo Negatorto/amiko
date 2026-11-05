@@ -1272,6 +1272,217 @@ class SettingsPanel {
                 }
             });
         }
+
+        // Vault Key Protection & OS Keyring (Admin)
+        this._initVaultControls();
+    }
+
+    _initVaultControls() {
+        const modeSelect = document.getElementById('vaultModeSelect');
+        const btnApply   = document.getElementById('btnVaultApplyMode');
+        const btnRotate  = document.getElementById('btnVaultRotateKey');
+        const btnSeal    = document.getElementById('btnVaultSealNow');
+
+        if (!modeSelect) return;
+
+        modeSelect.addEventListener('change', () => {
+            this._syncVaultFormVisibility();
+        });
+
+        if (btnApply) {
+            btnApply.addEventListener('click', async () => {
+                const mode = modeSelect.value;
+                const passphrase = (document.getElementById('vaultNewPassphrase')?.value || '').trim();
+                const current_passphrase = (document.getElementById('vaultCurrentPassphrase')?.value || '').trim();
+
+                if (mode === 'passphrase' && passphrase.length < 8) {
+                    if (window.AmikoAlert) window.AmikoAlert('Vault Protection', 'Master Passphrase must be at least 8 characters long.');
+                    return;
+                }
+
+                btnApply.disabled = true;
+                try {
+                    const res = await this.api('POST', '/api/vault/mode', {
+                        mode,
+                        passphrase,
+                        current_passphrase
+                    });
+                    if (!res || !res.success) {
+                        if (window.AmikoAlert) window.AmikoAlert('Vault Error', res?.error || 'Failed to update vault protection mode.');
+                        return;
+                    }
+                    document.getElementById('vaultNewPassphrase').value = '';
+                    document.getElementById('vaultCurrentPassphrase').value = '';
+                    this._renderVaultStatus(res.vault);
+                    if (window.AmikoAlert) {
+                        window.AmikoAlert(
+                            'Vault Protection Updated',
+                            `Active protection mode is now "${res.vault.mode}". ${res.vault.key_file_present ? 'Local key file (.amiko_key) is active.' : 'Local key file (.amiko_key) has been securely wiped from disk.'}`,
+                            'info'
+                        );
+                    }
+                } finally {
+                    btnApply.disabled = false;
+                }
+            });
+        }
+
+        if (btnRotate) {
+            btnRotate.addEventListener('click', () => {
+                const activeMode = this._vaultStatus?.mode || 'local_file';
+                const doRotate = async (pw = '') => {
+                    btnRotate.disabled = true;
+                    try {
+                        const res = await this.api('POST', '/api/vault/rotate', { passphrase: pw });
+                        if (!res || !res.success) {
+                            if (window.AmikoAlert) window.AmikoAlert('Key Rotation Error', res?.error || 'Failed to rotate encryption key.');
+                            return;
+                        }
+                        this._renderVaultStatus(res.vault);
+                        if (window.AmikoAlert) {
+                            window.AmikoAlert(
+                                'Encryption Key Rotated',
+                                `Vault Data Encryption Key (DEK) rotated and all encrypted stores re-encrypted. New Key ID: #${res.vault.key_id}`,
+                                'info'
+                            );
+                        }
+                    } finally {
+                        btnRotate.disabled = false;
+                    }
+                };
+
+                if (activeMode === 'passphrase') {
+                    const typed = (document.getElementById('vaultCurrentPassphrase')?.value || document.getElementById('vaultNewPassphrase')?.value || '').trim();
+                    if (typed) {
+                        doRotate(typed);
+                    } else if (window.AmikoPrompt) {
+                        window.AmikoPrompt(
+                            'Rotate Vault Key',
+                            'Enter your current Master Passphrase to re-wrap the newly rotated 256-bit DEK:',
+                            '',
+                            (val) => { if (val) doRotate(val.trim()); }
+                        );
+                    }
+                } else if (window.AmikoConfirm) {
+                    window.AmikoConfirm(
+                        'Rotate Vault Encryption Key',
+                        'Generate a new 256-bit Fernet key and re-encrypt settings, notes, and firewall configurations?',
+                        () => doRotate('')
+                    );
+                } else {
+                    doRotate('');
+                }
+            });
+        }
+
+        if (btnSeal) {
+            btnSeal.addEventListener('click', () => {
+                const doSeal = async () => {
+                    const res = await this.api('POST', '/api/vault/seal', {});
+                    if (res && res.success) {
+                        sessionStorage.removeItem('globalConnection');
+                        window.location.href = '/login';
+                    } else if (window.AmikoAlert) {
+                        window.AmikoAlert('Seal Error', res?.error || 'Could not seal vault.');
+                    }
+                };
+                if (window.AmikoConfirm) {
+                    window.AmikoConfirm(
+                        'Seal Vault in RAM',
+                        'Wipe the encryption key from RAM immediately and lock AMIKO? Active SSH sessions will be closed and the Master Passphrase will be required to unseal.',
+                        doSeal
+                    );
+                } else {
+                    doSeal();
+                }
+            });
+        }
+    }
+
+    async loadVaultStatus() {
+        if (!document.getElementById('vaultProtectionCard')) return;
+        try {
+            const status = await this.api('GET', '/api/vault/status');
+            if (status && !status.error) {
+                this._renderVaultStatus(status);
+            }
+        } catch (e) {
+            console.error('[Settings] Error loading vault status:', e);
+        }
+    }
+
+    _renderVaultStatus(status) {
+        this._vaultStatus = status;
+        const modeLabels = {
+            local_file: 'Local Key File (.amiko_key)',
+            os_keyring: 'OS Keyring (Decoupled)',
+            passphrase: 'Master Passphrase (RAM Only)'
+        };
+        const statMode    = document.getElementById('vaultStatMode');
+        const statDiskKey = document.getElementById('vaultStatDiskKey');
+        const statKeyring = document.getElementById('vaultStatKeyring');
+        const statKeyId   = document.getElementById('vaultStatKeyId');
+        const modeSelect  = document.getElementById('vaultModeSelect');
+        const btnSeal     = document.getElementById('btnVaultSealNow');
+
+        if (statMode) statMode.textContent = modeLabels[status.mode] || status.mode;
+        if (statDiskKey) {
+            if (status.key_file_present) {
+                statDiskKey.textContent = 'Present on Disk (0600)';
+                statDiskKey.style.color = 'var(--accent-warning)';
+            } else {
+                statDiskKey.textContent = 'Wiped from Disk ✓';
+                statDiskKey.style.color = 'var(--text-primary)';
+            }
+        }
+        if (statKeyring) {
+            const kr = status.keyring || {};
+            if (status.mode === 'os_keyring' && status.configured_keyring_backend) {
+                statKeyring.textContent = status.configured_keyring_backend;
+            } else if (kr.available) {
+                statKeyring.textContent = `Available (${kr.backend})`;
+            } else {
+                statKeyring.textContent = 'Unavailable';
+            }
+        }
+        if (statKeyId) {
+            statKeyId.textContent = `#${status.key_id || 'unknown'}`;
+        }
+        if (modeSelect) {
+            modeSelect.value = status.mode || 'local_file';
+        }
+        if (btnSeal) {
+            const canSeal = (status.mode === 'passphrase') || (status.mode === 'os_keyring' && status.has_recovery_passphrase);
+            btnSeal.style.display = canSeal ? 'inline-flex' : 'none';
+        }
+        this._syncVaultFormVisibility();
+    }
+
+    _syncVaultFormVisibility() {
+        const modeSelect = document.getElementById('vaultModeSelect');
+        const curRow     = document.getElementById('vaultCurrentPassRow');
+        const newRow     = document.getElementById('vaultNewPassRow');
+        const newLabel   = document.getElementById('vaultNewPassLabel');
+        const newInput   = document.getElementById('vaultNewPassphrase');
+        if (!modeSelect || !curRow || !newRow) return;
+
+        const targetMode = modeSelect.value;
+        const activeMode = this._vaultStatus?.mode || 'local_file';
+
+        // If active mode is passphrase, require current passphrase to change anything
+        curRow.style.display = (activeMode === 'passphrase') ? 'flex' : 'none';
+
+        if (targetMode === 'passphrase') {
+            newRow.style.display = 'flex';
+            if (newLabel) newLabel.textContent = activeMode === 'passphrase' ? 'NEW PASSPHRASE' : 'MASTER PASSPHRASE';
+            if (newInput) newInput.placeholder = 'Min. 8 characters (wraps DEK with PBKDF2-SHA256)';
+        } else if (targetMode === 'os_keyring') {
+            newRow.style.display = 'flex';
+            if (newLabel) newLabel.textContent = 'RECOVERY PASSPHRASE';
+            if (newInput) newInput.placeholder = 'Optional backup passphrase (for cold-boot recovery)';
+        } else {
+            newRow.style.display = 'none';
+        }
     }
 
     async loadInterface() {
@@ -1280,6 +1491,7 @@ class SettingsPanel {
             this._applyInterfaceFormValues(prefs);
             this._applyModuleGuards(prefs.active_modules || []);
             this._applyUiPrefsToApp(prefs);
+            await this.loadVaultStatus();
         } catch(e) {
             console.error('[Settings] Error loading interface prefs:', e);
         }
@@ -1445,7 +1657,7 @@ class SettingsPanel {
     applyTheme(themeId) {
         const link = document.getElementById('theme-stylesheet');
         if (link) {
-            link.href = `/static/css/themes/${themeId}.css?v=0.7.1`;
+            link.href = `/static/css/themes/${themeId}.css?v=0.7.3`;
             // Refresh JS theme bridge after CSS loads
             link.onload = () => {
                 if (typeof refreshThemeVars === 'function') {
@@ -1543,7 +1755,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.active_theme) {
                 const link = document.getElementById('theme-stylesheet');
                 if (link) {
-                    link.href = `/static/css/themes/${data.active_theme}.css?v=0.7.1`;
+                    link.href = `/static/css/themes/${data.active_theme}.css?v=0.7.3`;
                     link.onload = () => {
                         if (typeof refreshThemeVars === 'function') {
                             refreshThemeVars();

@@ -190,12 +190,27 @@ def init_auth(app):
                 "success": False
             }), 403
 
-        # 1. Public endpoints (login page, login API, 2FA challenge, static assets, read-only theme init)
+        # 1. Public endpoints (login page, vault status/unseal, login API, 2FA challenge, static assets, read-only theme init)
         if (
-            path in ("/login", "/api/auth/login", "/api/auth/2fa/verify", "/favicon.svg")
+            path in ("/login", "/api/vault/status", "/api/vault/unseal", "/favicon.svg")
             or path.startswith("/static/")
             or (path == "/api/themes" and request.method == "GET")
         ):
+            return None
+
+        # 1b. If the encrypted vault is sealed in RAM, block all other routes until unsealed
+        if settings.is_sealed:
+            session.clear()
+            if path == "/":
+                return redirect(url_for("login_page"))
+            return jsonify({
+                "error": "Vault is currently sealed. Please unseal the vault with the Master Passphrase.",
+                "status": "error",
+                "success": False,
+                "vault_sealed": True
+            }), 423
+
+        if path in ("/api/auth/login", "/api/auth/2fa/verify"):
             return None
 
         # 2. Require authenticated user & enforce idle session timeout
@@ -229,8 +244,8 @@ def init_auth(app):
         g.current_user = user
         role = user.get("role", "viewer")
 
-        # 3. Admin-only endpoints: User management, Audit Log, Backup & Server/Group mutations
-        if path.startswith(("/api/users", "/api/audit", "/api/backup", "/api/known-hosts", "/api/notifications")):
+        # 3. Admin-only endpoints: User management, Vault Security, Audit Log, Backup & Server/Group mutations
+        if path.startswith(("/api/users", "/api/vault", "/api/audit", "/api/backup", "/api/known-hosts", "/api/notifications")):
             if role != "admin":
                 log_audit_event(
                     event_type="RBAC_ACCESS_DENIED",

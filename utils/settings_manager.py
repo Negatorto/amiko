@@ -11,6 +11,7 @@ import uuid
 import base64
 import hashlib
 import io
+import getpass
 import secrets
 from datetime import datetime, timezone
 from cryptography.fernet import Fernet, InvalidToken
@@ -19,10 +20,27 @@ import pyotp
 import qrcode
 import qrcode.image.svg
 
+from utils.vault_key import (
+    VAULT_MODES,
+    KDF_ITERATIONS,
+    key_fingerprint,
+    wrap_dek_with_passphrase,
+    unwrap_dek_with_passphrase,
+    make_key_verifier,
+    check_key_verifier,
+    secure_wipe_file,
+    store_key_in_os_keyring,
+    load_key_from_os_keyring,
+    delete_key_from_os_keyring,
+    probe_os_keyring_capabilities,
+)
+
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 SETTINGS_FILE = os.path.join(DATA_DIR, 'settings.json.enc')
 KEY_FILE = os.path.join(DATA_DIR, '.amiko_key')
+VAULT_META_FILE = os.path.join(DATA_DIR, 'vault_meta.json')
+NOTES_ENC_FILE = os.path.join(DATA_DIR, 'notes_data.enc')
 
 VALID_ROLES = ("admin", "operator", "viewer")
 
@@ -74,30 +92,427 @@ DEFAULT_SETTINGS = {
 
 
 class SettingsManager:
-    """Thread-safe encrypted settings manager."""
+    """Thread-safe encrypted settings manager with Envelope Encryption & OS Keyring support."""
 
     def __init__(self):
         os.makedirs(DATA_DIR, exist_ok=True)
-        self._fernet = Fernet(self._load_or_create_key())
-        self._settings = self._load()
-        self._ensure_default_admin()
+        self._dek = None
+        self._fernet = None
+        self._unseal_listeners = []
+        self._rotate_listeners = []
+        self._vault_meta = self._load_or_init_vault_meta()
+        self._settings = json.loads(json.dumps(DEFAULT_SETTINGS))
+        self._try_auto_unseal()
 
-    # --- Key Management ---
+    # --- Vault Key Management & Envelope Protection ---
 
-    def _load_or_create_key(self):
+    @property
+    def is_sealed(self) -> bool:
+        """Return True if the vault DEK is not currently loaded in RAM."""
+        return self._fernet is None
+
+    def register_unseal_listener(self, callback):
+        """Register a callback(fernet) invoked whenever the vault is unsealed."""
+        if callback not in self._unseal_listeners:
+            self._unseal_listeners.append(callback)
+
+    def register_rotate_listener(self, callback):
+        """Register a callback(old_fernet, new_fernet) invoked when the vault DEK is rotated."""
+        if callback not in self._rotate_listeners:
+            self._rotate_listeners.append(callback)
+
+    def get_fernet(self) -> Fernet | None:
+        return self._fernet
+
+    def get_flask_secret_key(self) -> str:
+        """
+        Return a persistent secret key for signing Flask session cookies,
+        safe to call at startup even while the vault is sealed.
+        """
+        env_key = os.environ.get("AMIKO_SECRET_KEY")
+        if env_key:
+            return env_key
+        cookie_secret = self._vault_meta.get("cookie_secret")
+        if not cookie_secret:
+            cookie_secret = secrets.token_hex(32)
+            self._vault_meta["cookie_secret"] = cookie_secret
+            self._save_vault_meta()
+        return cookie_secret
+
+    def _load_or_init_vault_meta(self) -> dict:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if os.path.exists(VAULT_META_FILE):
+            try:
+                with open(VAULT_META_FILE, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                if isinstance(meta, dict):
+                    meta.setdefault("version", 1)
+                    meta.setdefault("mode", "local_file")
+                    if not meta.get("cookie_secret"):
+                        meta["cookie_secret"] = secrets.token_hex(32)
+                        self._save_vault_meta(meta)
+                    return meta
+            except Exception as e:
+                print(f"[SettingsManager] Warning: could not read vault_meta.json ({e})")
+
+        meta = {
+            "version": 1,
+            "mode": "local_file",
+            "created_at": now_iso,
+            "updated_at": now_iso,
+            "cookie_secret": secrets.token_hex(32),
+        }
+        self._save_vault_meta(meta)
+        return meta
+
+    def _save_vault_meta(self, meta: dict = None):
+        target = meta if meta is not None else self._vault_meta
+        tmp = f"{VAULT_META_FILE}.tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(target, f, indent=2)
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, VAULT_META_FILE)
+
+    def _load_or_create_key(self) -> bytes:
+        """Legacy helper for local_file mode."""
         if os.path.exists(KEY_FILE):
             with open(KEY_FILE, 'rb') as f:
-                return f.read()
+                return f.read().strip()
         key = Fernet.generate_key()
         with open(KEY_FILE, 'wb') as f:
             f.write(key)
         os.chmod(KEY_FILE, 0o600)
         return key
 
+    def _activate_dek(self, dek: bytes):
+        """Load the DEK into memory, decrypt settings, and notify listeners."""
+        dek_clean = dek.strip()
+        self._dek = dek_clean
+        self._fernet = Fernet(dek_clean)
+
+        # Ensure key_id and key_verifier are recorded in vault_meta.json
+        changed = False
+        fp = key_fingerprint(dek_clean)
+        if self._vault_meta.get("key_id") != fp:
+            self._vault_meta["key_id"] = fp
+            changed = True
+        if not self._vault_meta.get("key_verifier"):
+            self._vault_meta["key_verifier"] = make_key_verifier(dek_clean)
+            changed = True
+        if changed:
+            self._save_vault_meta()
+
+        self._settings = self._load()
+        self._ensure_default_admin()
+
+        for cb in list(self._unseal_listeners):
+            try:
+                cb(self._fernet)
+            except Exception as e:
+                print(f"[SettingsManager] Unseal listener error: {e}")
+
+    def _try_auto_unseal(self):
+        """
+        Attempt to unseal the vault automatically at startup using:
+          1. AMIKO_VAULT_KEY environment variable (raw Fernet key)
+          2. AMIKO_MASTER_PASSPHRASE environment variable (passphrase unwrap)
+          3. Configured protection mode ('local_file' or 'os_keyring')
+        If mode is 'passphrase' (and no env var is set), the vault remains SEALED.
+        """
+        verifier = self._vault_meta.get("key_verifier")
+
+        # 1. Explicit raw key in environment variable
+        env_key = (os.environ.get("AMIKO_VAULT_KEY") or "").strip()
+        if env_key:
+            raw_bytes = env_key.encode("ascii")
+            if check_key_verifier(raw_bytes, verifier):
+                self._activate_dek(raw_bytes)
+                return
+
+        # 2. Explicit master passphrase in environment variable
+        env_pass = (os.environ.get("AMIKO_MASTER_PASSPHRASE") or "").strip()
+        if env_pass and self._vault_meta.get("wrapped_key"):
+            try:
+                dek = unwrap_dek_with_passphrase(self._vault_meta, env_pass)
+                if check_key_verifier(dek, verifier):
+                    self._activate_dek(dek)
+                    return
+            except ValueError as e:
+                print(f"[SettingsManager] AMIKO_MASTER_PASSPHRASE failed to unseal vault: {e}")
+
+        mode = self._vault_meta.get("mode", "local_file")
+
+        # 3a. Local Disk Key mode (default)
+        if mode == "local_file":
+            dek = self._load_or_create_key()
+            self._activate_dek(dek)
+            return
+
+        # 3b. OS Keyring mode
+        if mode == "os_keyring":
+            dek, backend_name = load_key_from_os_keyring()
+            if dek and check_key_verifier(dek, verifier):
+                if backend_name and self._vault_meta.get("keyring_backend") != backend_name:
+                    self._vault_meta["keyring_backend"] = backend_name
+                    self._save_vault_meta()
+                self._activate_dek(dek)
+                return
+            # Fallback: if .amiko_key still exists on disk from an interrupted migration
+            if os.path.exists(KEY_FILE):
+                with open(KEY_FILE, "rb") as f:
+                    disk_dek = f.read().strip()
+                if check_key_verifier(disk_dek, verifier):
+                    try:
+                        b_name = store_key_in_os_keyring(disk_dek)
+                        self._vault_meta["keyring_backend"] = b_name
+                        self._save_vault_meta()
+                        secure_wipe_file(KEY_FILE)
+                    except Exception:
+                        pass
+                    self._activate_dek(disk_dek)
+                    return
+            print("[SettingsManager] OS Keyring did not return an active key. Vault is starting in SEALED state.")
+            return
+
+        # 3c. Master Passphrase mode -> starts SEALED in RAM until unsealed via Web UI or CLI
+        print("[SettingsManager] Vault protection mode is 'passphrase'. Starting in SEALED state.")
+
+    def ensure_cli_unsealed(self) -> bool:
+        """
+        Helper for interactive CLI tools (reset_2fa.py, reset_firewall.py, vault_ctl.py).
+        If the vault is sealed, prompts the operator on the terminal for the Master Passphrase.
+        """
+        if not self.is_sealed:
+            return True
+        if not self._vault_meta.get("wrapped_key"):
+            print("[ERROR] Vault is sealed and no recovery/master passphrase envelope is available.")
+            return False
+        for attempt in range(1, 4):
+            try:
+                pw = getpass.getpass(f"[AMIKO Vault Sealed] Enter Master Passphrase ({attempt}/3): ")
+            except (EOFError, KeyboardInterrupt):
+                print()
+                return False
+            try:
+                if self.unseal(pw):
+                    return True
+            except ValueError as e:
+                print(f"  -> {e}")
+        return False
+
+    def unseal(self, passphrase: str) -> bool:
+        """
+        Unseal a locked vault in memory using the Master Passphrase (or recovery passphrase).
+        Raises ValueError if the passphrase is invalid.
+        """
+        pw = (passphrase or "").strip()
+        if not pw:
+            raise ValueError("Master Passphrase is required.")
+        dek = unwrap_dek_with_passphrase(self._vault_meta, pw)
+        verifier = self._vault_meta.get("key_verifier")
+        if not check_key_verifier(dek, verifier):
+            raise ValueError("Decrypted key does not match the vault verifier.")
+
+        # If mode is os_keyring (e.g. cold boot cleared kernel keyring), restore key into OS keyring automatically
+        if self._vault_meta.get("mode") == "os_keyring":
+            try:
+                b_name = store_key_in_os_keyring(dek)
+                self._vault_meta["keyring_backend"] = b_name
+                self._save_vault_meta()
+            except Exception as e:
+                print(f"[SettingsManager] Could not re-populate OS keyring on unseal: {e}")
+
+        self._activate_dek(dek)
+        return True
+
+    def seal(self) -> bool:
+        """
+        Wipe the DEK from RAM and lock the vault immediately.
+        Only permitted when a passphrase envelope or OS keyring can unseal it again.
+        """
+        if self.is_sealed:
+            return True
+        mode = self._vault_meta.get("mode", "local_file")
+        if mode == "local_file" and not self._vault_meta.get("wrapped_key"):
+            raise ValueError(
+                "Cannot seal the vault while in 'Local Key File' mode without a Master Passphrase. "
+                "Switch protection mode to 'Master Passphrase' first."
+            )
+        # If sealing in os_keyring mode, require a recovery passphrase envelope or remove volatile key
+        if mode == "os_keyring":
+            if not self._vault_meta.get("wrapped_key"):
+                raise ValueError(
+                    "To manually seal an OS Keyring vault, configure a recovery Master Passphrase first."
+                )
+            delete_key_from_os_keyring()
+
+        self._dek = None
+        self._fernet = None
+        self._settings = json.loads(json.dumps(DEFAULT_SETTINGS))
+        return True
+
+    def get_vault_status(self) -> dict:
+        """Return safe telemetry about the encrypted vault and key protection layer."""
+        keyring_info = probe_os_keyring_capabilities()
+        return {
+            "sealed": self.is_sealed,
+            "mode": self._vault_meta.get("mode", "local_file"),
+            "key_id": key_fingerprint(self._dek) if not self.is_sealed else self._vault_meta.get("key_id", "sealed"),
+            "key_file_present": os.path.exists(KEY_FILE),
+            "has_recovery_passphrase": bool(self._vault_meta.get("wrapped_key")),
+            "keyring": keyring_info,
+            "configured_keyring_backend": self._vault_meta.get("keyring_backend"),
+            "kdf": self._vault_meta.get("kdf", "PBKDF2-HMAC-SHA256"),
+            "iterations": self._vault_meta.get("iterations", KDF_ITERATIONS),
+            "updated_at": self._vault_meta.get("updated_at"),
+            "rotated_at": self._vault_meta.get("rotated_at"),
+            "env_override": bool(os.environ.get("AMIKO_VAULT_KEY") or os.environ.get("AMIKO_MASTER_PASSPHRASE")),
+        }
+
+    def set_vault_mode(self, mode: str, passphrase: str = "", current_passphrase: str = "") -> dict:
+        """
+        Transition the vault DEK between 'local_file', 'passphrase', and 'os_keyring' modes.
+        Securely wipes `data/.amiko_key` when decoupling from local disk.
+        """
+        if self.is_sealed or not self._dek:
+            raise ValueError("Vault must be unsealed before changing protection mode.")
+        if mode not in VAULT_MODES:
+            raise ValueError(f"Invalid vault mode '{mode}'. Choose from: {', '.join(VAULT_MODES)}.")
+
+        # If currently in passphrase mode, verify current_passphrase when provided or required
+        if self._vault_meta.get("mode") == "passphrase" and self._vault_meta.get("wrapped_key"):
+            cur_pw = (current_passphrase or passphrase or "").strip()
+            if not cur_pw:
+                raise ValueError("Current Master Passphrase is required to change vault protection mode.")
+            unwrap_dek_with_passphrase(self._vault_meta, cur_pw)
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        pw = (passphrase or "").strip()
+
+        if mode == "passphrase":
+            if len(pw) < 8:
+                raise ValueError("Master Passphrase must be at least 8 characters long.")
+            envelope = wrap_dek_with_passphrase(self._dek, pw)
+            self._vault_meta.update(envelope)
+            self._vault_meta["mode"] = "passphrase"
+            self._vault_meta["keyring_backend"] = None
+            self._vault_meta["key_id"] = key_fingerprint(self._dek)
+            self._vault_meta["key_verifier"] = make_key_verifier(self._dek)
+            self._vault_meta["updated_at"] = now_iso
+            self._save_vault_meta()
+            delete_key_from_os_keyring()
+            secure_wipe_file(KEY_FILE)
+
+        elif mode == "os_keyring":
+            backend_name = store_key_in_os_keyring(self._dek)
+            if pw:
+                if len(pw) < 8:
+                    raise ValueError("Recovery Passphrase must be at least 8 characters long.")
+                envelope = wrap_dek_with_passphrase(self._dek, pw)
+                self._vault_meta.update(envelope)
+            self._vault_meta["mode"] = "os_keyring"
+            self._vault_meta["keyring_backend"] = backend_name
+            self._vault_meta["key_id"] = key_fingerprint(self._dek)
+            self._vault_meta["key_verifier"] = make_key_verifier(self._dek)
+            self._vault_meta["updated_at"] = now_iso
+            self._save_vault_meta()
+            secure_wipe_file(KEY_FILE)
+
+        elif mode == "local_file":
+            with open(KEY_FILE, "wb") as f:
+                f.write(self._dek)
+            os.chmod(KEY_FILE, 0o600)
+            delete_key_from_os_keyring()
+            for k in ("kdf", "iterations", "salt", "wrapped_key", "keyring_backend"):
+                self._vault_meta.pop(k, None)
+            self._vault_meta["mode"] = "local_file"
+            self._vault_meta["key_id"] = key_fingerprint(self._dek)
+            self._vault_meta["key_verifier"] = make_key_verifier(self._dek)
+            self._vault_meta["updated_at"] = now_iso
+            self._save_vault_meta()
+
+        return self.get_vault_status()
+
+    def rotate_vault_key(self, passphrase: str = "") -> dict:
+        """
+        Generate a brand-new 256-bit Fernet DEK and atomically re-encrypt:
+          - data/settings.json.enc
+          - data/notes_data.enc
+          - data/firewall.json.enc (via registered rotate listeners)
+        Then persist the new DEK in the active protection layer.
+        """
+        if self.is_sealed or not self._dek or not self._fernet:
+            raise ValueError("Vault must be unsealed before rotating the encryption key.")
+
+        mode = self._vault_meta.get("mode", "local_file")
+        pw = (passphrase or "").strip()
+
+        if mode == "passphrase":
+            if not pw:
+                raise ValueError("Master Passphrase is required to re-wrap the newly rotated key.")
+            # Verify passphrase against current envelope before rotating so a typo never locks the admin out
+            unwrap_dek_with_passphrase(self._vault_meta, pw)
+        elif mode == "os_keyring" and self._vault_meta.get("wrapped_key") and pw:
+            unwrap_dek_with_passphrase(self._vault_meta, pw)
+
+        old_fernet = self._fernet
+        new_dek = Fernet.generate_key()
+        new_fernet = Fernet(new_dek)
+
+        # 1. Re-encrypt notes_data.enc if present
+        if os.path.exists(NOTES_ENC_FILE):
+            with open(NOTES_ENC_FILE, "rb") as f:
+                notes_plain = old_fernet.decrypt(f.read())
+            notes_tmp = f"{NOTES_ENC_FILE}.tmp"
+            with open(notes_tmp, "wb") as f:
+                f.write(new_fernet.encrypt(notes_plain))
+            os.chmod(notes_tmp, 0o600)
+            os.replace(notes_tmp, NOTES_ENC_FILE)
+
+        # 2. Switch settings cipher and re-encrypt settings.json.enc
+        self._dek = new_dek
+        self._fernet = new_fernet
+        self._save()
+
+        # 3. Notify external encrypted stores (e.g. FirewallManager)
+        for cb in list(self._rotate_listeners):
+            try:
+                cb(old_fernet, new_fernet)
+            except Exception as e:
+                print(f"[SettingsManager] Rotate listener error: {e}")
+
+        # 4. Persist new DEK in the active key protection backend
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if mode == "local_file":
+            with open(KEY_FILE, "wb") as f:
+                f.write(new_dek)
+            os.chmod(KEY_FILE, 0o600)
+        elif mode == "os_keyring":
+            b_name = store_key_in_os_keyring(new_dek)
+            self._vault_meta["keyring_backend"] = b_name
+            if pw:
+                self._vault_meta.update(wrap_dek_with_passphrase(new_dek, pw))
+            else:
+                # If no passphrase was supplied during rotation in os_keyring mode, clear stale envelope
+                for k in ("salt", "wrapped_key"):
+                    self._vault_meta.pop(k, None)
+            secure_wipe_file(KEY_FILE)
+        elif mode == "passphrase":
+            self._vault_meta.update(wrap_dek_with_passphrase(new_dek, pw))
+            secure_wipe_file(KEY_FILE)
+
+        self._vault_meta["key_id"] = key_fingerprint(new_dek)
+        self._vault_meta["key_verifier"] = make_key_verifier(new_dek)
+        self._vault_meta["rotated_at"] = now_iso
+        self._vault_meta["updated_at"] = now_iso
+        self._save_vault_meta()
+
+        return self.get_vault_status()
+
     # --- Persistence ---
 
     def _load(self):
-        if not os.path.exists(SETTINGS_FILE):
+        if self.is_sealed or not os.path.exists(SETTINGS_FILE):
             return json.loads(json.dumps(DEFAULT_SETTINGS))
         try:
             with open(SETTINGS_FILE, 'rb') as f:
@@ -114,10 +529,15 @@ class SettingsManager:
             return json.loads(json.dumps(DEFAULT_SETTINGS))
 
     def _save(self):
+        if self.is_sealed:
+            raise RuntimeError("Cannot write to encrypted settings while the vault is sealed.")
         raw = json.dumps(self._settings, indent=2).encode('utf-8')
         encrypted = self._fernet.encrypt(raw)
-        with open(SETTINGS_FILE, 'wb') as f:
+        tmp = f"{SETTINGS_FILE}.tmp"
+        with open(tmp, 'wb') as f:
             f.write(encrypted)
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, SETTINGS_FILE)
 
     # --- Users & RBAC (Least Privilege) ---
 

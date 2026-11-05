@@ -1179,3 +1179,193 @@ def api_backup_import():
         return jsonify({'error': str(e)}), 400
 
 
+# --- Vault Key Protection & OS Keyring API ---
+
+@app.route('/api/vault/status', methods=['GET'])
+def api_vault_status():
+    """
+    Publicly returns whether the vault is sealed (so /login can display the Unseal screen).
+    When authenticated as an admin, returns full key protection and OS Keyring telemetry.
+    """
+    user = get_current_user() if not settings.is_sealed else None
+    status = settings.get_vault_status()
+    if user and user.get('role') == 'admin':
+        return jsonify(status)
+    return jsonify({
+        'sealed': status['sealed'],
+        'mode': status['mode'],
+        'has_recovery_passphrase': status['has_recovery_passphrase']
+    })
+
+
+@app.route('/api/vault/unseal', methods=['POST'])
+def api_vault_unseal():
+    """Unseal the encrypted vault in RAM using the Master Passphrase."""
+    if not settings.is_sealed:
+        return jsonify({'success': True, 'sealed': False})
+
+    source_ip = get_client_ip()
+    lock_key = "__vault_unseal__"
+    locked, rem_seconds = check_login_lockout(lock_key, source_ip)
+    if locked:
+        log_audit_event(
+            event_type='VAULT_UNSEAL_LOCKOUT',
+            status='DENIED',
+            severity='ALERT',
+            actor={'username': 'vault-unseal', 'source_ip': source_ip, 'role': 'none'},
+            details={'reason': 'Vault unseal locked due to repeated failed attempts', 'remaining_seconds': rem_seconds}
+        )
+        report_failure('amiko-login', 'Vault unseal attempt during lockout')
+        return jsonify({
+            'success': False,
+            'error': f'Too many failed unseal attempts. Try again in {rem_seconds}s.'
+        }), 429
+
+    data = request.get_json(silent=True) or {}
+    passphrase = (data.get('passphrase') or '').strip()
+    if not passphrase:
+        return jsonify({'success': False, 'error': 'Master Passphrase is required.'}), 400
+
+    try:
+        settings.unseal(passphrase)
+    except ValueError as e:
+        report_failure('amiko-login', 'Invalid Master Passphrase during vault unseal')
+        just_locked, lock_rem, fail_count = record_login_attempt(lock_key, source_ip, success=False)
+        if just_locked:
+            log_audit_event(
+                event_type='VAULT_UNSEAL_LOCKOUT',
+                status='DENIED',
+                severity='ALERT',
+                actor={'username': 'vault-unseal', 'source_ip': source_ip, 'role': 'none'},
+                details={'failed_attempts': fail_count, 'lockout_seconds': lock_rem}
+            )
+            return jsonify({
+                'success': False,
+                'error': f'Too many failed unseal attempts ({fail_count}). Locked for {lock_rem}s.'
+            }), 429
+
+        log_audit_event(
+            event_type='VAULT_UNSEAL_FAILED',
+            status='FAILURE',
+            severity='WARNING',
+            actor={'username': 'vault-unseal', 'source_ip': source_ip, 'role': 'none'},
+            details={'failed_attempts': fail_count, 'error': str(e)}
+        )
+        return jsonify({'success': False, 'error': 'Invalid Master Passphrase.'}), 401
+
+    record_login_attempt(lock_key, source_ip, success=True)
+    status = settings.get_vault_status()
+    log_audit_event(
+        event_type='VAULT_UNSEALED',
+        status='SUCCESS',
+        severity='NOTICE',
+        actor={'username': 'vault-unseal', 'source_ip': source_ip, 'role': 'admin'},
+        details={'mode': status['mode'], 'key_id': status['key_id']}
+    )
+    return jsonify({'success': True, 'sealed': False, 'key_id': status['key_id']})
+
+
+@app.route('/api/vault/mode', methods=['POST'])
+@role_required('admin')
+def api_vault_set_mode():
+    """Switch vault key protection mode between local_file, passphrase, and os_keyring."""
+    data = request.get_json(silent=True) or {}
+    mode = (data.get('mode') or '').strip()
+    passphrase = (data.get('passphrase') or '').strip()
+    current_passphrase = (data.get('current_passphrase') or '').strip()
+
+    prev_mode = settings.get_vault_status().get('mode')
+    try:
+        status = settings.set_vault_mode(
+            mode=mode,
+            passphrase=passphrase,
+            current_passphrase=current_passphrase
+        )
+        log_audit_event(
+            event_type='VAULT_MODE_CHANGED',
+            status='SUCCESS',
+            severity='WARNING',
+            details={
+                'previous_mode': prev_mode,
+                'new_mode': status['mode'],
+                'key_file_present': status['key_file_present'],
+                'keyring_backend': status.get('configured_keyring_backend'),
+                'key_id': status['key_id']
+            }
+        )
+        return jsonify({'success': True, 'vault': status})
+    except (ValueError, RuntimeError) as e:
+        log_audit_event(
+            event_type='VAULT_MODE_CHANGED',
+            status='FAILURE',
+            severity='WARNING',
+            details={'requested_mode': mode, 'error': str(e)}
+        )
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@app.route('/api/vault/rotate', methods=['POST'])
+@role_required('admin')
+def api_vault_rotate_key():
+    """Rotate the 256-bit Fernet DEK and atomically re-encrypt settings, notes, and firewall stores."""
+    data = request.get_json(silent=True) or {}
+    passphrase = (data.get('passphrase') or '').strip()
+    old_key_id = settings.get_vault_status().get('key_id')
+
+    try:
+        status = settings.rotate_vault_key(passphrase=passphrase)
+        log_audit_event(
+            event_type='VAULT_KEY_ROTATED',
+            status='SUCCESS',
+            severity='WARNING',
+            details={
+                'old_key_id': old_key_id,
+                'new_key_id': status['key_id'],
+                'mode': status['mode']
+            }
+        )
+        return jsonify({'success': True, 'vault': status})
+    except (ValueError, RuntimeError) as e:
+        log_audit_event(
+            event_type='VAULT_KEY_ROTATED',
+            status='FAILURE',
+            severity='WARNING',
+            details={'error': str(e)}
+        )
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@app.route('/api/vault/seal', methods=['POST'])
+@role_required('admin')
+def api_vault_seal():
+    """Wipe the active DEK from RAM and lock the vault immediately."""
+    user = get_current_user()
+    try:
+        settings.seal()
+        # Disconnect active SSH sessions and clear current session
+        for sid, s_info in list(ssh_sessions.items()):
+            try:
+                if s_info.get('ssh'):
+                    s_info['ssh'].close()
+            except Exception:
+                pass
+        ssh_sessions.clear()
+        log_audit_event(
+            event_type='VAULT_SEALED',
+            status='SUCCESS',
+            severity='WARNING',
+            actor={
+                'user_id': user['id'] if user else '',
+                'username': user['username'] if user else 'admin',
+                'role': 'admin',
+                'source_ip': get_client_ip()
+            },
+            details={'reason': 'Manual seal triggered by administrator'}
+        )
+        session.clear()
+        return jsonify({'success': True, 'sealed': True})
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+
+
